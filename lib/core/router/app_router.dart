@@ -25,6 +25,8 @@ const String kForgotPasswordRoute = '/forgot-password';
 const String kOnboardingRoute = '/onboarding';
 const String kHomeRoute = '/home';
 const String kRosterRoute = '/roster';
+const String kRosterAddPlayerRoute = '/roster/add-player';
+const String kPlayerProfileRoute = '/roster/player/:id';
 const String kNotificationsRoute = '/notifications';
 const String kProfileRoute = '/profile';
 
@@ -149,6 +151,24 @@ GoRouter appRouter(AppRouterRef ref) {
               GoRoute(
                 path: kRosterRoute,
                 builder: (context, state) => const RosterListScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'add-player',
+                    builder: (context, state) => const _PlaceholderScreen(
+                      title: 'Add Player',
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'player/:id',
+                    builder: (context, state) {
+                      final id = state.pathParameters['id']!;
+                      return _PlaceholderScreen(
+                        title: 'Player Profile',
+                        subtitle: id,
+                      );
+                    },
+                  ),
+                ],
               ),
             ],
           ),
@@ -172,4 +192,35 @@ GoRouter appRouter(AppRouterRef ref) {
       ),
     ],
   );
+}
+
+// ── Placeholder screen for sub-routes not yet built ──────────
+
+class _PlaceholderScreen extends StatelessWidget {
+  const _PlaceholderScreen({required this.title, this.subtitle});
+
+  final String title;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '$title — coming soon',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 8),
+              Text(subtitle!, style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }

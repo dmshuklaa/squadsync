@@ -10,6 +10,10 @@ class TeamMembership {
     required this.status,
     required this.createdAt,
     required this.updatedAt,
+    // Joined from profiles — only present when fetched with a profiles join
+    this.profileFullName,
+    this.profileAvatarUrl,
+    this.profileAvailabilityThisWeek,
   });
 
   final String id;
@@ -21,7 +25,13 @@ class TeamMembership {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  // Joined profile fields
+  final String? profileFullName;
+  final String? profileAvatarUrl;
+  final bool? profileAvailabilityThisWeek;
+
   factory TeamMembership.fromJson(Map<String, dynamic> json) {
+    final profiles = json['profiles'] as Map<String, dynamic>?;
     return TeamMembership(
       id: json['id'] as String,
       teamId: json['team_id'] as String,
@@ -31,6 +41,10 @@ class TeamMembership {
       status: MembershipStatus.fromString(json['status'] as String),
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
+      profileFullName: profiles?['full_name'] as String?,
+      profileAvatarUrl: profiles?['avatar_url'] as String?,
+      profileAvailabilityThisWeek:
+          profiles?['availability_this_week'] as bool?,
     );
   }
 
@@ -56,6 +70,9 @@ class TeamMembership {
     MembershipStatus? status,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? profileFullName,
+    String? profileAvatarUrl,
+    bool? profileAvailabilityThisWeek,
   }) {
     return TeamMembership(
       id: id ?? this.id,
@@ -66,6 +83,10 @@ class TeamMembership {
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      profileFullName: profileFullName ?? this.profileFullName,
+      profileAvatarUrl: profileAvatarUrl ?? this.profileAvatarUrl,
+      profileAvailabilityThisWeek:
+          profileAvailabilityThisWeek ?? this.profileAvailabilityThisWeek,
     );
   }
 }
