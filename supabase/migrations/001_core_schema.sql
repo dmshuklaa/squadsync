@@ -130,21 +130,24 @@ CREATE TRIGGER team_memberships_updated_at
 -- 5. AUTO-CREATE PROFILE TRIGGER
 -- ────────────────────────────────────────────────────────────
 
-CREATE OR REPLACE FUNCTION handle_new_user()
-RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER SET search_path = public
+AS $$
 BEGIN
   INSERT INTO public.profiles (id, full_name, role)
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'full_name', 'New User'),
     COALESCE(
-      (NEW.raw_user_meta_data->>'role')::user_role,
+      (NEW.raw_user_meta_data->>'role')::public.user_role,
       'player'
     )
   );
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users

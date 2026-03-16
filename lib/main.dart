@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:squadsync/core/router/app_router.dart';
 import 'package:squadsync/core/theme/app_theme.dart';
-import 'package:squadsync/features/auth/screens/sign_in_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,16 +28,17 @@ Future<void> main() async {
   );
 }
 
-class SquadSyncApp extends StatelessWidget {
+class SquadSyncApp extends ConsumerWidget {
   const SquadSyncApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(appRouterProvider);
+    return MaterialApp.router(
       title: 'SquadSync',
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      home: const SignInScreen(),
+      routerConfig: router,
     );
   }
 }
