@@ -7,6 +7,7 @@ import 'package:squadsync/core/theme/app_theme.dart';
 import 'package:squadsync/core/utils/error_mapper.dart';
 import 'package:squadsync/core/utils/validators.dart';
 import 'package:squadsync/features/auth/providers/auth_provider.dart';
+import 'package:squadsync/shared/widgets/squad_sync_logo.dart';
 
 class SignInScreen extends ConsumerStatefulWidget {
   const SignInScreen({super.key});
@@ -57,37 +58,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: 60),
-                // Logo
-                Center(
-                  child: Container(
-                    width: 72,
-                    height: 72,
-                    decoration: const BoxDecoration(
-                      color: AppColors.primary,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'SS',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // App name
-                const Text(
-                  'SquadSync',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primary,
-                  ),
+                // Logo + "SquadSync" wordmark
+                const Center(
+                  child: SquadSyncLogo(size: 72, showTagline: true),
                 ),
                 const SizedBox(height: 4),
                 Text(

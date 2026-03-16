@@ -129,6 +129,7 @@ GoRouter appRouter(AppRouterRef ref) {
       ),
       GoRoute(
         path: kOnboardingRoute,
+        name: 'onboarding',
         builder: (context, state) => const OnboardingScreen(),
       ),
       StatefulShellRoute.indexedStack(
