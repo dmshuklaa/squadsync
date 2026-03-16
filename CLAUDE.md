@@ -54,7 +54,8 @@ lib/
       providers/             Riverpod providers for auth state
       screens/               sign_in, sign_up, forgot_password
     onboarding/
-      screens/               join_club, create_club
+      providers/             onboarding_provider (createClub, joinClub)
+      screens/               onboarding_screen (TabBar: create club / join club)
     roster/
       data/
       providers/
@@ -83,7 +84,7 @@ lib/
       providers/
       screens/               chat_screen (embedded in event_detail)
   shared/
-    widgets/                 Reusable UI widgets used across features
+    widgets/                 squad_sync_logo, bottom_nav_shell
     models/                  Shared data models / Dart classes
     extensions/              Dart extension methods
 
@@ -151,8 +152,44 @@ Functions:
 - Reporting and CSV export (EP-09)
 
 ## sprint progress
-Sprint 1 — Foundation & Auth        [ ]
+Sprint 1 — Foundation & Auth        [x]
 Sprint 2 — Roster Management        [ ]
 Sprint 3 — Events & Fill-in         [ ]
 Sprint 4 — Chat & Notifications     [ ]
 Sprint 5 — Polish & App Store Prep  [ ]
+
+## Sprint 1 — what was built
+### 1.1 Project scaffold
+- Flutter project, pubspec.yaml (all deps), .env, .gitignore
+- lib/core/supabase/supabase_client.dart — singleton getter
+- lib/core/theme/app_theme.dart — AppColors.primary (#1E3A5F), AppColors.secondary (#2E75B6), Material 3 light + dark themes
+
+### 1.2 Database schema
+- supabase/migrations/001_core_schema.sql
+  - Enums: user_role, membership_status, guardian_permission
+  - Tables: clubs, divisions, teams, profiles, team_memberships, guardian_links
+  - handle_new_user() trigger — SECURITY DEFINER SET search_path = public
+  - generate_join_code() Postgres function
+  - RLS enabled on all 6 tables, 16 policies
+- lib/shared/models/ — Club, Division, Team, Profile, TeamMembership, GuardianLink (all with fromJson/toJson/copyWith)
+- lib/shared/models/enums.dart — UserRole, MembershipStatus, GuardianPermission
+
+### 1.3 Auth flow
+- lib/features/auth/providers/auth_provider.dart — AuthNotifier (@riverpod AsyncNotifier): signIn, signUp (returns bool for email-confirm flow), signOut, sendPasswordResetEmail
+- lib/core/router/app_router.dart — GoRouter with _AuthChangeNotifier refreshListenable, redirect logic (5 cases), StatefulShellRoute.indexedStack (4 tabs)
+- lib/core/utils/validators.dart — email, password, fullName validators
+- lib/core/utils/error_mapper.dart — AuthErrorMapper with contains() matching
+- Screens: sign_in, sign_up (SegmentedButton role selector), forgot_password (two-view pattern)
+- lib/shared/widgets/bottom_nav_shell.dart — 4-tab BottomNavigationBar
+
+### 1.4 Onboarding flow
+- lib/features/onboarding/providers/onboarding_provider.dart — OnboardingNotifier (@riverpod): createClub (client-side UUID, seeds Division 1 + Team 1), joinClub (ClubNotFoundException for inline error)
+- lib/features/onboarding/screens/onboarding_screen.dart — DefaultTabController, two tabs, SquadSyncLogo, no AppBar
+- lib/shared/widgets/squad_sync_logo.dart — size + showTagline params
+- lib/features/profile/screens/profile_screen.dart — email, role, Sign Out (dev placeholder)
+- supabase/migrations/002_fix_rls_recursion.sql — get_my_club_id() SECURITY DEFINER function, 10 policy fixes
+
+## known pre-production cleanup
+- Remove diagnostic print statements in onboarding_provider.dart before App Store submission
+- Remove debug print in error_mapper.dart before App Store submission
+- Profile screen role reads from JWT userMetadata (signup role) — replace with live DB fetch in Sprint 5
