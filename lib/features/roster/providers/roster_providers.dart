@@ -4,8 +4,8 @@ import 'package:squadsync/core/supabase/supabase_client.dart';
 import 'package:squadsync/features/roster/data/roster_repository.dart';
 import 'package:squadsync/shared/models/division.dart';
 import 'package:squadsync/shared/models/profile.dart';
+import 'package:squadsync/shared/models/roster_entry.dart';
 import 'package:squadsync/shared/models/team.dart';
-import 'package:squadsync/shared/models/team_membership.dart';
 
 part 'roster_providers.g.dart';
 
@@ -27,7 +27,7 @@ Future<Profile> currentProfile(CurrentProfileRef ref) async {
   final data = await supabase
       .from('profiles')
       .select(
-        'id, full_name, phone, avatar_url, role, club_id, '
+        'id, full_name, email, phone, avatar_url, role, club_id, '
         'push_token, availability_this_week, created_at, updated_at',
       )
       .eq('id', userId)
@@ -54,16 +54,27 @@ Future<List<Team>> userTeams(UserTeamsRef ref) async {
 
 // ── Roster for a team ────────────────────────────────────────
 
-/// Returns roster memberships for [teamId].
+/// Returns roster entries for [teamId], merging real memberships and
+/// pending players into a unified [RosterEntry] list sorted by name.
 @riverpod
-Future<List<TeamMembership>> teamRoster(
+Future<List<RosterEntry>> teamRoster(
   TeamRosterRef ref,
   String teamId,
 ) async {
   // ignore: avoid_print
   print('[teamRosterProvider] building for teamId: $teamId');
   final repo = ref.watch(rosterRepositoryProvider);
-  return repo.getTeamRoster(teamId);
+
+  final memberships = await repo.getTeamRoster(teamId);
+  final pending = await repo.getPendingPlayers(teamId);
+
+  final entries = [
+    ...memberships.map(RosterEntry.fromMembership),
+    ...pending.map(RosterEntry.fromPendingPlayer),
+  ];
+
+  entries.sort((a, b) => a.fullName.compareTo(b.fullName));
+  return entries;
 }
 
 // ── Divisions for club ───────────────────────────────────────

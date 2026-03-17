@@ -4,6 +4,7 @@ class Profile {
   const Profile({
     required this.id,
     required this.fullName,
+    this.email,
     this.phone,
     this.avatarUrl,
     required this.role,
@@ -16,6 +17,8 @@ class Profile {
 
   final String id;
   final String fullName;
+  // Denormalised from auth.users — nullable for profiles created before migration 004
+  final String? email;
   final String? phone;
   final String? avatarUrl;
   final UserRole role;
@@ -29,6 +32,7 @@ class Profile {
     return Profile(
       id: json['id'] as String,
       fullName: json['full_name'] as String,
+      email: json['email'] as String?,
       phone: json['phone'] as String?,
       avatarUrl: json['avatar_url'] as String?,
       role: UserRole.fromString(json['role'] as String),
@@ -44,6 +48,7 @@ class Profile {
     return {
       'id': id,
       'full_name': fullName,
+      'email': email,
       'phone': phone,
       'avatar_url': avatarUrl,
       'role': role.toJson(),
@@ -58,6 +63,7 @@ class Profile {
   Profile copyWith({
     String? id,
     String? fullName,
+    String? email,
     String? phone,
     String? avatarUrl,
     UserRole? role,
@@ -70,6 +76,7 @@ class Profile {
     return Profile(
       id: id ?? this.id,
       fullName: fullName ?? this.fullName,
+      email: email ?? this.email,
       phone: phone ?? this.phone,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       role: role ?? this.role,

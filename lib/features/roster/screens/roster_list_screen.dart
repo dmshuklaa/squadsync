@@ -7,8 +7,8 @@ import 'package:squadsync/core/theme/app_theme.dart';
 import 'package:squadsync/features/roster/providers/roster_providers.dart';
 import 'package:squadsync/features/roster/screens/widgets/roster_list_item.dart';
 import 'package:squadsync/shared/models/enums.dart';
+import 'package:squadsync/shared/models/roster_entry.dart';
 import 'package:squadsync/shared/models/team.dart';
-import 'package:squadsync/shared/models/team_membership.dart';
 import 'package:squadsync/shared/widgets/empty_state_widget.dart';
 import 'package:squadsync/shared/widgets/error_state_widget.dart';
 import 'package:squadsync/shared/widgets/loading_shimmer.dart';
@@ -30,9 +30,9 @@ class _RosterListScreenState extends ConsumerState<RosterListScreen> {
     // Auto-select first team once teams load — handled via ref.listen in build()
   }
 
-  List<TeamMembership> _applyFilter(List<TeamMembership> all) {
+  List<RosterEntry> _applyFilter(List<RosterEntry> all) {
     if (_statusFilter == null) return all;
-    return all.where((m) => m.status == _statusFilter).toList();
+    return all.where((e) => e.status == _statusFilter).toList();
   }
 
   @override
@@ -71,7 +71,12 @@ class _RosterListScreenState extends ConsumerState<RosterListScreen> {
             IconButton(
               icon: const Icon(Icons.person_add_outlined),
               tooltip: 'Add player',
-              onPressed: () => context.push(kRosterAddPlayerRoute),
+              onPressed: _selectedTeamId == null
+                  ? null
+                  : () => context.push(
+                        kRosterAddPlayerRoute,
+                        extra: _selectedTeamId,
+                      ),
             ),
         ],
       ),
@@ -100,13 +105,16 @@ class _RosterListScreenState extends ConsumerState<RosterListScreen> {
           Expanded(child: _buildRosterBody()),
         ],
       ),
-      floatingActionButton: canManageRoster
+      floatingActionButton: canManageRoster && _selectedTeamId != null
           ? FloatingActionButton.extended(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
               icon: const Icon(Icons.person_add),
               label: const Text('Add Player'),
-              onPressed: () => context.push(kRosterAddPlayerRoute),
+              onPressed: () => context.push(
+                kRosterAddPlayerRoute,
+                extra: _selectedTeamId,
+              ),
             )
           : null,
     );
@@ -214,16 +222,19 @@ class _RosterListScreenState extends ConsumerState<RosterListScreen> {
           onRetry: () => ref.invalidate(teamRosterProvider(teamId)),
         );
       },
-      data: (memberships) {
-        final filtered = _applyFilter(memberships);
+      data: (entries) {
+        final filtered = _applyFilter(entries);
 
-        if (memberships.isEmpty) {
+        if (entries.isEmpty) {
           return EmptyStateWidget(
             icon: Icons.group_outlined,
             title: 'No players yet',
             subtitle: 'Add your first player to get started',
             actionLabel: 'Add Player',
-            onAction: () => context.push(kRosterAddPlayerRoute),
+            onAction: () => context.push(
+              kRosterAddPlayerRoute,
+              extra: teamId,
+            ),
           );
         }
 
@@ -247,12 +258,15 @@ class _RosterListScreenState extends ConsumerState<RosterListScreen> {
             separatorBuilder: (_, _) =>
                 const Divider(height: 1, indent: 72),
             itemBuilder: (_, i) {
-              final membership = filtered[i];
+              final entry = filtered[i];
               return RosterListItem(
-                membership: membership,
-                onTap: () => context.push(
-                  kPlayerProfileRoute.replaceFirst(':id', membership.profileId),
-                ),
+                entry: entry,
+                onTap: entry.isPending
+                    ? null
+                    : () => context.push(
+                          kPlayerProfileRoute.replaceFirst(
+                              ':id', entry.profileId),
+                        ),
               );
             },
           ),

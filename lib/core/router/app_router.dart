@@ -13,6 +13,7 @@ import 'package:squadsync/features/events/screens/home_screen.dart';
 import 'package:squadsync/features/notifications/screens/notifications_screen.dart';
 import 'package:squadsync/features/onboarding/screens/onboarding_screen.dart';
 import 'package:squadsync/features/profile/screens/profile_screen.dart';
+import 'package:squadsync/features/roster/screens/add_player_screen.dart';
 import 'package:squadsync/features/roster/screens/roster_list_screen.dart';
 import 'package:squadsync/shared/widgets/bottom_nav_shell.dart';
 
@@ -154,8 +155,8 @@ GoRouter appRouter(AppRouterRef ref) {
                 routes: [
                   GoRoute(
                     path: 'add-player',
-                    builder: (context, state) => const _PlaceholderScreen(
-                      title: 'Add Player',
+                    builder: (context, state) => AddPlayerScreen(
+                      teamId: state.extra as String?,
                     ),
                   ),
                   GoRoute(

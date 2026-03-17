@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'package:squadsync/shared/models/team_membership.dart';
+import 'package:squadsync/shared/models/roster_entry.dart';
 import 'package:squadsync/shared/widgets/avatar_widget.dart';
 import 'package:squadsync/shared/widgets/status_badge.dart';
 
@@ -9,20 +9,15 @@ import 'package:squadsync/shared/widgets/status_badge.dart';
 class RosterListItem extends StatelessWidget {
   const RosterListItem({
     super.key,
-    required this.membership,
-    required this.onTap,
+    required this.entry,
+    this.onTap,
   });
 
-  final TeamMembership membership;
-  final VoidCallback onTap;
+  final RosterEntry entry;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final name = membership.profileFullName ?? 'Unknown Player';
-    final position = membership.position;
-    final jersey = membership.jerseyNumber;
-    final available = membership.profileAvailabilityThisWeek;
-
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       onTap: onTap,
@@ -30,11 +25,11 @@ class RosterListItem extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           AvatarWidget(
-            fullName: name,
-            avatarUrl: membership.profileAvatarUrl,
+            fullName: entry.fullName,
+            avatarUrl: entry.avatarUrl,
             size: 44,
           ),
-          if (available != null)
+          if (!entry.isPending)
             Positioned(
               right: -2,
               bottom: -2,
@@ -42,7 +37,9 @@ class RosterListItem extends StatelessWidget {
                 width: 12,
                 height: 12,
                 decoration: BoxDecoration(
-                  color: available ? Colors.green : Colors.orange,
+                  color: entry.availabilityThisWeek
+                      ? Colors.green
+                      : Colors.orange,
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 1.5),
                 ),
@@ -51,15 +48,15 @@ class RosterListItem extends StatelessWidget {
         ],
       ),
       title: Text(
-        name,
+        entry.fullName,
         style: const TextStyle(fontWeight: FontWeight.w500),
         overflow: TextOverflow.ellipsis,
       ),
       subtitle: Text(
-        _subtitle(position, jersey),
+        _subtitle(entry.position, entry.jerseyNumber),
         style: TextStyle(fontSize: 13, color: Colors.grey[600]),
       ),
-      trailing: StatusBadge(membership.status),
+      trailing: StatusBadge(entry.status),
     );
   }
 
