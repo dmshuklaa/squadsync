@@ -14,10 +14,27 @@ import 'package:squadsync/features/notifications/screens/notifications_screen.da
 import 'package:squadsync/features/onboarding/screens/onboarding_screen.dart';
 import 'package:squadsync/features/profile/screens/profile_screen.dart';
 import 'package:squadsync/features/roster/screens/add_player_screen.dart';
+import 'package:squadsync/features/roster/screens/player_profile_screen.dart';
 import 'package:squadsync/features/roster/screens/roster_list_screen.dart';
 import 'package:squadsync/shared/widgets/bottom_nav_shell.dart';
 
 part 'app_router.g.dart';
+
+// ── Route argument types ─────────────────────────────────────
+
+/// Arguments for the /roster/player/:id route.
+/// [id] is the profileId for real players, or the pendingPlayerId for pending.
+class PlayerProfileArgs {
+  const PlayerProfileArgs({
+    required this.id,
+    required this.isPending,
+    required this.teamId,
+  });
+
+  final String id;
+  final bool isPending;
+  final String teamId;
+}
 
 // ── Named route paths ────────────────────────────────────────
 const String kSignInRoute = '/sign-in';
@@ -162,10 +179,11 @@ GoRouter appRouter(AppRouterRef ref) {
                   GoRoute(
                     path: 'player/:id',
                     builder: (context, state) {
-                      final id = state.pathParameters['id']!;
-                      return _PlaceholderScreen(
-                        title: 'Player Profile',
-                        subtitle: id,
+                      final args = state.extra as PlayerProfileArgs;
+                      return PlayerProfileScreen(
+                        playerId: args.id,
+                        isPending: args.isPending,
+                        teamId: args.teamId,
                       );
                     },
                   ),
@@ -195,33 +213,3 @@ GoRouter appRouter(AppRouterRef ref) {
   );
 }
 
-// ── Placeholder screen for sub-routes not yet built ──────────
-
-class _PlaceholderScreen extends StatelessWidget {
-  const _PlaceholderScreen({required this.title, this.subtitle});
-
-  final String title;
-  final String? subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '$title — coming soon',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            if (subtitle != null) ...[
-              const SizedBox(height: 8),
-              Text(subtitle!, style: Theme.of(context).textTheme.bodySmall),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}

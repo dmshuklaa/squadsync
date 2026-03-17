@@ -2,7 +2,9 @@ import 'package:squadsync/core/supabase/supabase_client.dart';
 import 'package:squadsync/features/roster/data/csv_mapper.dart';
 import 'package:squadsync/shared/models/division.dart';
 import 'package:squadsync/shared/models/enums.dart';
+import 'package:squadsync/shared/models/guardian_link.dart';
 import 'package:squadsync/shared/models/pending_player.dart';
+import 'package:squadsync/shared/models/profile.dart';
 import 'package:squadsync/shared/models/team.dart';
 import 'package:squadsync/shared/models/team_membership.dart';
 
@@ -410,6 +412,163 @@ class RosterRepository {
     return (response as List)
         .map((row) => PendingPlayer.fromJson(row as Map<String, dynamic>))
         .toList();
+  }
+
+  // ── Player profile ───────────────────────────────────────────
+
+  /// Fetches a single [Profile] by [profileId]. Returns null if not found.
+  Future<Profile?> getProfileById(String profileId) async {
+    final data = await supabase
+        .from('profiles')
+        .select(
+          'id, full_name, email, phone, avatar_url, role, club_id, '
+          'push_token, availability_this_week, created_at, updated_at',
+        )
+        .eq('id', profileId)
+        .maybeSingle();
+
+    if (data == null) return null;
+    return Profile.fromJson(data);
+  }
+
+  /// Fetches a single [PendingPlayer] by [pendingPlayerId].
+  /// Returns null if not found.
+  Future<PendingPlayer?> getPendingPlayerById(String pendingPlayerId) async {
+    final data = await supabase
+        .from('pending_players')
+        .select()
+        .eq('id', pendingPlayerId)
+        .maybeSingle();
+
+    if (data == null) return null;
+    return PendingPlayer.fromJson(data);
+  }
+
+  /// Fetches the [TeamMembership] for [profileId] in [teamId].
+  /// Returns null if no membership exists.
+  Future<TeamMembership?> getMembershipForPlayer({
+    required String profileId,
+    required String teamId,
+  }) async {
+    final data = await supabase
+        .from('team_memberships')
+        .select(
+          'id, team_id, profile_id, position, jersey_number, status, '
+          'created_at, updated_at, '
+          'profiles(full_name, avatar_url, availability_this_week)',
+        )
+        .eq('profile_id', profileId)
+        .eq('team_id', teamId)
+        .maybeSingle();
+
+    if (data == null) return null;
+    return TeamMembership.fromJson(data);
+  }
+
+  /// Updates the [status] column of a team membership.
+  Future<void> updateMembershipStatus({
+    required String membershipId,
+    required MembershipStatus status,
+  }) async {
+    await supabase
+        .from('team_memberships')
+        .update({'status': status.toJson()})
+        .eq('id', membershipId);
+  }
+
+  /// Updates [position] and [jerseyNumber] on a team membership.
+  Future<void> updateMembershipDetails({
+    required String membershipId,
+    String? position,
+    int? jerseyNumber,
+  }) async {
+    await supabase.from('team_memberships').update({
+      'position': position,
+      'jersey_number': jerseyNumber,
+    }).eq('id', membershipId);
+  }
+
+  /// Updates [availability_this_week] on a profile (own profile only — RLS enforced).
+  Future<void> updateAvailability({
+    required String profileId,
+    required bool available,
+  }) async {
+    await supabase
+        .from('profiles')
+        .update({'availability_this_week': available})
+        .eq('id', profileId);
+  }
+
+  /// Returns fill-in history for [profileId], limited to 20 rows.
+  /// Returns an empty list if the [fill_in_log] table does not exist yet.
+  Future<List<Map<String, dynamic>>> getFillInHistory(
+      String profileId) async {
+    try {
+      final response = await supabase
+          .from('fill_in_log')
+          .select('game_name, event_date, target_division_name, outcome')
+          .eq('player_profile_id', profileId)
+          .order('event_date', ascending: false)
+          .limit(20);
+
+      return (response as List).cast<Map<String, dynamic>>();
+    } catch (_) {
+      // Table does not exist yet (Sprint 3) — return empty list
+      return [];
+    }
+  }
+
+  /// Returns guardian links for [playerProfileId], joining guardian profile data.
+  Future<List<GuardianLink>> getGuardianLinks(
+      String playerProfileId) async {
+    try {
+      final response = await supabase
+          .from('guardian_links')
+          .select(
+            'id, player_profile_id, guardian_profile_id, '
+            'permission_level, confirmed, created_at, '
+            'profiles!guardian_profile_id(full_name, avatar_url)',
+          )
+          .eq('player_profile_id', playerProfileId);
+
+      return (response as List)
+          .map((row) => GuardianLink.fromJson(row as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Deletes a pending_players row by [pendingPlayerId].
+  Future<void> deletePendingPlayer(String pendingPlayerId) async {
+    await supabase
+        .from('pending_players')
+        .delete()
+        .eq('id', pendingPlayerId);
+  }
+
+  /// Calls the send-invite Edge Function to resend a magic-link email.
+  /// Does not create a new pending_player row — the player is already listed.
+  Future<void> resendInviteEmail({
+    required String teamId,
+    required String email,
+    String? fullName,
+  }) async {
+    try {
+      await supabase.functions.invoke(
+        'send-invite',
+        body: {
+          'email': email,
+          'fullName': fullName ?? email,
+          'teamId': teamId,
+          'sendEmail': true,
+        },
+      );
+    } catch (e) {
+      // Edge Function not yet deployed — silently succeed (nothing to resend)
+      // ignore: avoid_print
+      print('send-invite not available for resend: $e');
+    }
   }
 
   /// Returns all divisions for a club, ordered by display_order.

@@ -8,6 +8,9 @@ class GuardianLink {
     required this.permissionLevel,
     required this.confirmed,
     required this.createdAt,
+    // Joined from profiles — only present when fetched with a profiles join
+    this.guardianFullName,
+    this.guardianAvatarUrl,
   });
 
   final String id;
@@ -17,7 +20,12 @@ class GuardianLink {
   final bool confirmed;
   final DateTime createdAt;
 
+  // Joined guardian profile fields
+  final String? guardianFullName;
+  final String? guardianAvatarUrl;
+
   factory GuardianLink.fromJson(Map<String, dynamic> json) {
+    final profiles = json['profiles'] as Map<String, dynamic>?;
     return GuardianLink(
       id: json['id'] as String,
       playerProfileId: json['player_profile_id'] as String,
@@ -26,6 +34,8 @@ class GuardianLink {
           GuardianPermission.fromString(json['permission_level'] as String),
       confirmed: json['confirmed'] as bool,
       createdAt: DateTime.parse(json['created_at'] as String),
+      guardianFullName: profiles?['full_name'] as String?,
+      guardianAvatarUrl: profiles?['avatar_url'] as String?,
     );
   }
 
@@ -47,6 +57,8 @@ class GuardianLink {
     GuardianPermission? permissionLevel,
     bool? confirmed,
     DateTime? createdAt,
+    String? guardianFullName,
+    String? guardianAvatarUrl,
   }) {
     return GuardianLink(
       id: id ?? this.id,
@@ -55,6 +67,8 @@ class GuardianLink {
       permissionLevel: permissionLevel ?? this.permissionLevel,
       confirmed: confirmed ?? this.confirmed,
       createdAt: createdAt ?? this.createdAt,
+      guardianFullName: guardianFullName ?? this.guardianFullName,
+      guardianAvatarUrl: guardianAvatarUrl ?? this.guardianAvatarUrl,
     );
   }
 }

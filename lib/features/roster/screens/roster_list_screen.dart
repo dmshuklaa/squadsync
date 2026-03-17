@@ -259,14 +259,18 @@ class _RosterListScreenState extends ConsumerState<RosterListScreen> {
                 const Divider(height: 1, indent: 72),
             itemBuilder: (_, i) {
               final entry = filtered[i];
+              final playerId =
+                  entry.isPending ? entry.id : entry.profileId;
               return RosterListItem(
                 entry: entry,
-                onTap: entry.isPending
-                    ? null
-                    : () => context.push(
-                          kPlayerProfileRoute.replaceFirst(
-                              ':id', entry.profileId),
-                        ),
+                onTap: () => context.push(
+                  kPlayerProfileRoute.replaceFirst(':id', playerId),
+                  extra: PlayerProfileArgs(
+                    id: playerId,
+                    isPending: entry.isPending,
+                    teamId: teamId,
+                  ),
+                ),
               );
             },
           ),
