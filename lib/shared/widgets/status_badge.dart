@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:squadsync/core/theme/app_theme.dart';
 import 'package:squadsync/shared/models/enums.dart';
 
 /// Small coloured pill that displays a [MembershipStatus] label.
@@ -11,17 +12,17 @@ class StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: _backgroundColor,
-        borderRadius: BorderRadius.circular(12),
+        color: _surfaceColor,
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         _label,
         style: TextStyle(
-          color: _foregroundColor,
           fontSize: 11,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
+          color: _textColor,
           letterSpacing: 0.3,
         ),
       ),
@@ -41,29 +42,29 @@ class StatusBadge extends StatelessWidget {
     }
   }
 
-  Color get _backgroundColor {
+  Color get _surfaceColor {
     switch (status) {
       case MembershipStatus.active:
-        return const Color(0xFFD1FAE5); // green-100
+        return AppColors.activeSurface;
       case MembershipStatus.inactive:
-        return const Color(0xFFFEF3C7); // amber-100
+        return AppColors.inactiveSurface;
       case MembershipStatus.archived:
-        return const Color(0xFFF3F4F6); // gray-100
+        return AppColors.archivedSurface;
       case MembershipStatus.pending:
-        return const Color(0xFFDBEAFE); // blue-100
+        return AppColors.pendingSurface;
     }
   }
 
-  Color get _foregroundColor {
+  Color get _textColor {
     switch (status) {
       case MembershipStatus.active:
-        return const Color(0xFF065F46); // green-800
+        return AppColors.activeGreen;
       case MembershipStatus.inactive:
-        return const Color(0xFF92400E); // amber-800
+        return AppColors.inactiveGrey;
       case MembershipStatus.archived:
-        return const Color(0xFF374151); // gray-700
+        return AppColors.archivedRed;
       case MembershipStatus.pending:
-        return const Color(0xFF1E40AF); // blue-800
+        return AppColors.pendingAmber;
     }
   }
 }

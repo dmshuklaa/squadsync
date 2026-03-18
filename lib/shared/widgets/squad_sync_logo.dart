@@ -4,13 +4,21 @@ import 'package:squadsync/core/theme/app_theme.dart';
 
 /// Reusable SquadSync "SS" logo circle.
 ///
-/// [size] controls the diameter of the circle.
-/// [showTagline] also renders "SquadSync" text below the circle.
+/// [size] controls the diameter of the inner circle.
+/// [showTagline] renders "SquadSync" text below the circle.
+/// [taglineColor] controls the tagline text colour — use [Colors.white]
+/// when the logo is placed on a dark (navy) background.
 class SquadSyncLogo extends StatelessWidget {
-  const SquadSyncLogo({super.key, this.size = 64, this.showTagline = false});
+  const SquadSyncLogo({
+    super.key,
+    this.size = 64,
+    this.showTagline = false,
+    this.taglineColor = AppColors.textSecondary,
+  });
 
   final double size;
   final bool showTagline;
+  final Color taglineColor;
 
   @override
   Widget build(BuildContext context) {
@@ -18,20 +26,36 @@ class SquadSyncLogo extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: size,
-          height: size,
-          decoration: const BoxDecoration(
-            color: AppColors.primary,
+          width: size + 6, // outer ring padding
+          height: size + 6,
+          decoration: BoxDecoration(
             shape: BoxShape.circle,
+            border: Border.all(color: AppColors.accent, width: 3),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.accent.withValues(alpha: 0.3),
+                blurRadius: 12,
+                spreadRadius: 2,
+              ),
+            ],
           ),
           child: Center(
-            child: Text(
-              'SS',
-              style: TextStyle(
-                color: Colors.white,
-                // 0.39 keeps "SS" proportional — yields ~28 px at size 72
-                fontSize: size * 0.39,
-                fontWeight: FontWeight.bold,
+            child: Container(
+              width: size,
+              height: size,
+              decoration: const BoxDecoration(
+                color: AppColors.primary,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  'SS',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: size * 0.39,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ),
           ),
@@ -43,7 +67,7 @@ class SquadSyncLogo extends StatelessWidget {
             style: TextStyle(
               fontSize: size * 0.39,
               fontWeight: FontWeight.bold,
-              color: AppColors.primary,
+              color: taglineColor,
             ),
           ),
         ],

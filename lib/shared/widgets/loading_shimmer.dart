@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 
+import 'package:squadsync/core/theme/app_theme.dart';
+
 /// Full-screen shimmer placeholder for roster list loading state.
 class RosterShimmer extends StatelessWidget {
   const RosterShimmer({super.key});
@@ -8,29 +10,41 @@ class RosterShimmer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Shimmer.fromColors(
-      baseColor: Colors.grey[300]!,
-      highlightColor: Colors.grey[100]!,
-      child: ListView.separated(
+      baseColor: AppColors.border,
+      highlightColor: AppColors.accentSurface,
+      child: ListView.builder(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         itemCount: 6,
-        separatorBuilder: (_, _) => const Divider(height: 1),
-        itemBuilder: (_, _) => const _ShimmerRow(),
+        itemBuilder: (_, _) => const _ShimmerCard(),
       ),
     );
   }
 }
 
-class _ShimmerRow extends StatelessWidget {
-  const _ShimmerRow();
+class _ShimmerCard extends StatelessWidget {
+  const _ShimmerCard();
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
       child: Row(
         children: [
           // Avatar placeholder
-          const CircleAvatar(radius: 22, backgroundColor: Colors.white),
+          Container(
+            width: 48,
+            height: 48,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+            ),
+          ),
           const SizedBox(width: 12),
           // Text placeholders
           Expanded(
@@ -40,21 +54,31 @@ class _ShimmerRow extends StatelessWidget {
                 Container(
                   height: 14,
                   width: double.infinity,
-                  color: Colors.white,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
                 ),
                 const SizedBox(height: 6),
-                Container(height: 12, width: 120, color: Colors.white),
+                Container(
+                  height: 12,
+                  width: 120,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
               ],
             ),
           ),
           const SizedBox(width: 12),
           // Badge placeholder
           Container(
-            height: 20,
-            width: 56,
+            height: 24,
+            width: 60,
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(20),
             ),
           ),
         ],

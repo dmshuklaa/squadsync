@@ -176,63 +176,104 @@ class _PlayerProfileScreenState extends ConsumerState<PlayerProfileScreen> {
 
   Widget _buildPendingBody(PendingPlayer pending) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
       child: Column(
         children: [
-          const SizedBox(height: 12),
-          AvatarWidget(fullName: pending.fullName, size: 72),
-          const SizedBox(height: 16),
-          Text(
-            pending.fullName,
-            style: const TextStyle(
-                fontSize: 20, fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          Chip(
-            label: const Text('Pending invitation'),
-            backgroundColor: Colors.amber[100],
-            labelStyle: TextStyle(
-              color: Colors.amber[900],
-              fontWeight: FontWeight.w500,
-              fontSize: 12,
+          // Navy banner
+          Container(
+            width: double.infinity,
+            decoration: const BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(32),
+                bottomRight: Radius.circular(32),
+              ),
+            ),
+            padding: const EdgeInsets.fromLTRB(16, 28, 16, 28),
+            child: Column(
+              children: [
+                AvatarWidget(
+                    fullName: pending.fullName, size: 72, showRing: true),
+                const SizedBox(height: 14),
+                Text(
+                  pending.fullName,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.pendingAmber.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                        color:
+                            AppColors.pendingAmber.withValues(alpha: 0.5)),
+                  ),
+                  child: const Text(
+                    'Pending invitation',
+                    style: TextStyle(
+                      color: AppColors.pendingAmber,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 20),
-          ListTile(
-            leading: const Icon(Icons.email_outlined),
-            title: Text(pending.email),
-            onTap: () => _launch('mailto:${pending.email}'),
-          ),
-          if (pending.phone != null && pending.phone!.isNotEmpty)
-            ListTile(
-              leading: const Icon(Icons.phone_outlined),
-              title: Text(pending.phone!),
-              onTap: () => _launch('tel:${pending.phone}'),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.email_outlined,
+                      color: AppColors.accent),
+                  title: Text(pending.email),
+                  onTap: () => _launch('mailto:${pending.email}'),
+                ),
+                if (pending.phone != null && pending.phone!.isNotEmpty)
+                  ListTile(
+                    leading: const Icon(Icons.phone_outlined,
+                        color: AppColors.accent),
+                    title: Text(pending.phone!),
+                    onTap: () => _launch('tel:${pending.phone}'),
+                  ),
+                if (pending.position != null &&
+                    pending.position!.isNotEmpty)
+                  ListTile(
+                    leading: const Icon(Icons.sports_outlined,
+                        color: AppColors.accent),
+                    title: Text(pending.position!),
+                    subtitle: const Text('Position'),
+                  ),
+                if (pending.jerseyNumber != null)
+                  ListTile(
+                    leading: const Icon(Icons.tag,
+                        color: AppColors.accent),
+                    title: Text('#${pending.jerseyNumber}'),
+                    subtitle: const Text('Jersey number'),
+                  ),
+                const SizedBox(height: 24),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.send_outlined),
+                  label: const Text('Resend invite'),
+                  onPressed: () => _handleResendInvite(pending),
+                ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: () => _confirmRemovePending(pending),
+                  style: TextButton.styleFrom(
+                      foregroundColor: AppColors.error),
+                  child: const Text('Remove from team'),
+                ),
+              ],
             ),
-          if (pending.position != null && pending.position!.isNotEmpty)
-            ListTile(
-              leading: const Icon(Icons.sports_outlined),
-              title: Text(pending.position!),
-              subtitle: const Text('Position'),
-            ),
-          if (pending.jerseyNumber != null)
-            ListTile(
-              leading: const Icon(Icons.tag),
-              title: Text('#${pending.jerseyNumber}'),
-              subtitle: const Text('Jersey number'),
-            ),
-          const SizedBox(height: 32),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.send_outlined),
-            label: const Text('Resend invite'),
-            onPressed: () => _handleResendInvite(pending),
-          ),
-          const SizedBox(height: 12),
-          TextButton(
-            onPressed: () => _confirmRemovePending(pending),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Remove from team'),
           ),
         ],
       ),
@@ -412,39 +453,58 @@ class _PlayerProfileScreenState extends ConsumerState<PlayerProfileScreen> {
 
     return Container(
       width: double.infinity,
-      color: AppColors.primary.withValues(alpha: 0.04),
-      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+      decoration: const BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(32),
+          bottomRight: Radius.circular(32),
+        ),
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 28, 16, 28),
       child: Column(
         children: [
           AvatarWidget(
             fullName: profile.fullName,
             avatarUrl: profile.avatarUrl,
             size: 80,
+            showRing: true,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Text(
             profile.fullName,
             style: const TextStyle(
-                fontSize: 22, fontWeight: FontWeight.bold),
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 6),
-          Chip(
-            label: Text(_roleName(profile.role)),
-            backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-            labelStyle: TextStyle(
-              color: AppColors.primary,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.accent.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                  color: AppColors.accent.withValues(alpha: 0.5)),
             ),
-            padding: EdgeInsets.zero,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            child: Text(
+              _roleName(profile.role),
+              style: const TextStyle(
+                color: AppColors.accentLight,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
           if (teamDisplayName != null) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
             Text(
               teamDisplayName!,
-              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.white.withValues(alpha: 0.7),
+              ),
             ),
           ],
         ],
@@ -893,29 +953,30 @@ class _PlayerProfileScreenState extends ConsumerState<PlayerProfileScreen> {
     required List<Widget> children,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Card(
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: Colors.grey[200]!),
-        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (title != null)
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
+                padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
                 child: Row(
                   children: [
+                    // Teal left accent bar
+                    Container(
+                      width: 3,
+                      height: 18,
+                      decoration: BoxDecoration(
+                        color: AppColors.accent,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        title,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                          letterSpacing: 0.3,
-                        ),
+                        title.toUpperCase(),
+                        style: AppTextStyles.label,
                       ),
                     ),
                     ?trailing,

@@ -44,7 +44,11 @@ class RosterEntry {
   static RosterEntry fromPendingPlayer(PendingPlayer p) => RosterEntry(
         id: p.id,
         profileId: '',
-        fullName: p.fullName,
+        // Guard: sendInvite fallback stores email as full_name when no name
+        // is provided. Display the local-part only so raw emails never appear.
+        fullName: (p.fullName == p.email)
+            ? p.email.split('@').first
+            : p.fullName,
         avatarUrl: null,
         position: p.position,
         jerseyNumber: p.jerseyNumber,

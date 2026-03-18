@@ -22,13 +22,7 @@ class RosterListScreen extends ConsumerStatefulWidget {
 
 class _RosterListScreenState extends ConsumerState<RosterListScreen> {
   String? _selectedTeamId;
-  MembershipStatus? _statusFilter; // null = show all
-
-  @override
-  void initState() {
-    super.initState();
-    // Auto-select first team once teams load — handled via ref.listen in build()
-  }
+  MembershipStatus? _statusFilter;
 
   List<RosterEntry> _applyFilter(List<RosterEntry> all) {
     if (_statusFilter == null) return all;
@@ -66,51 +60,45 @@ class _RosterListScreenState extends ConsumerState<RosterListScreen> {
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         elevation: 0,
-        actions: [
-          if (canManageRoster)
-            IconButton(
-              icon: const Icon(Icons.person_add_outlined),
-              tooltip: 'Add player',
-              onPressed: _selectedTeamId == null
-                  ? null
-                  : () => context.push(
-                        kRosterAddPlayerRoute,
-                        extra: _selectedTeamId,
-                      ),
-            ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // ── Team picker ──────────────────────────────────────
-          teamsAsync.when(
+        // ── Team picker in AppBar bottom ──────────────────────
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(52),
+          child: teamsAsync.when(
             loading: () => const SizedBox(
-              height: 56,
+              height: 52,
               child: Center(
                 child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ),
-            error: (e, _) => const SizedBox.shrink(),
+            error: (_, _) => const SizedBox(height: 52),
             data: (teams) => _buildTeamPicker(teams),
           ),
-
-          // ── Status filter chips ──────────────────────────────
+        ),
+      ),
+      body: Column(
+        children: [
+          // ── Status filter bar ────────────────────────────────
           _buildFilterBar(),
-
           // ── Roster list ──────────────────────────────────────
           Expanded(child: _buildRosterBody()),
         ],
       ),
       floatingActionButton: canManageRoster && _selectedTeamId != null
           ? FloatingActionButton.extended(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
+              backgroundColor: AppColors.accent,
+              foregroundColor: AppColors.primary,
               icon: const Icon(Icons.person_add),
-              label: const Text('Add Player'),
+              label: const Text(
+                'Add Player',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
               onPressed: () => context.push(
                 kRosterAddPlayerRoute,
                 extra: _selectedTeamId,
@@ -121,14 +109,14 @@ class _RosterListScreenState extends ConsumerState<RosterListScreen> {
   }
 
   Widget _buildTeamPicker(List<Team> teams) {
-    if (teams.isEmpty) return const SizedBox.shrink();
+    if (teams.isEmpty) return const SizedBox(height: 52);
 
-    return Container(
-      height: 56,
-      color: AppColors.primary.withValues(alpha: 0.05),
+    return SizedBox(
+      height: 52,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         itemCount: teams.length,
         separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (_, i) {
@@ -138,14 +126,22 @@ class _RosterListScreenState extends ConsumerState<RosterListScreen> {
               ? '${team.divisionName} · ${team.name}'
               : team.name;
 
-          return ChoiceChip(
+          return RawChip(
             label: Text(label),
             selected: isSelected,
-            selectedColor: AppColors.primary,
+            showCheckmark: false,
+            avatar: null,
+            deleteIcon: null,
+            backgroundColor: Colors.white.withValues(alpha: 0.15),
+            selectedColor: AppColors.accent,
+            side: isSelected
+                ? BorderSide.none
+                : BorderSide(
+                    color: Colors.white.withValues(alpha: 0.4)),
             labelStyle: TextStyle(
-              color: isSelected ? Colors.white : Colors.grey[800],
+              color: isSelected ? AppColors.primary : Colors.white,
               fontWeight:
-                  isSelected ? FontWeight.w600 : FontWeight.normal,
+                  isSelected ? FontWeight.w700 : FontWeight.w500,
               fontSize: 13,
             ),
             onSelected: (_) {
@@ -165,30 +161,45 @@ class _RosterListScreenState extends ConsumerState<RosterListScreen> {
       (label: 'Pending', value: MembershipStatus.pending),
     ];
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-      child: Row(
-        children: filters.map((f) {
-          final isSelected = _statusFilter == f.value;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: FilterChip(
-              label: Text(f.label),
-              selected: isSelected,
-              selectedColor: AppColors.primary.withValues(alpha: 0.15),
-              checkmarkColor: AppColors.primary,
-              labelStyle: TextStyle(
-                color:
-                    isSelected ? AppColors.primary : Colors.grey[700],
-                fontSize: 13,
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        child: Row(
+          children: filters.map((f) {
+            final isSelected = _statusFilter == f.value;
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: FilterChip(
+                label: Text(f.label),
+                selected: isSelected,
+                selectedColor: AppColors.primary,
+                backgroundColor: AppColors.surface,
+                checkmarkColor: Colors.white,
+                showCheckmark: false,
+                side: isSelected
+                    ? BorderSide.none
+                    : const BorderSide(color: AppColors.border),
+                labelStyle: TextStyle(
+                  color: isSelected
+                      ? Colors.white
+                      : AppColors.textSecondary,
+                  fontSize: 13,
+                  fontWeight: isSelected
+                      ? FontWeight.w600
+                      : FontWeight.normal,
+                ),
+                onSelected: (_) {
+                  setState(() => _statusFilter = f.value);
+                },
               ),
-              onSelected: (_) {
-                setState(() => _statusFilter = f.value);
-              },
-            ),
-          );
-        }).toList(),
+            );
+          }).toList(),
+        ),
       ),
     );
   }
@@ -226,20 +237,15 @@ class _RosterListScreenState extends ConsumerState<RosterListScreen> {
         final filtered = _applyFilter(entries);
 
         if (entries.isEmpty) {
-          return EmptyStateWidget(
+          return const EmptyStateWidget(
             icon: Icons.group_outlined,
             title: 'No players yet',
-            subtitle: 'Add your first player to get started',
-            actionLabel: 'Add Player',
-            onAction: () => context.push(
-              kRosterAddPlayerRoute,
-              extra: teamId,
-            ),
+            subtitle: 'Tap the button below to add your first player',
           );
         }
 
         if (filtered.isEmpty) {
-          return EmptyStateWidget(
+          return const EmptyStateWidget(
             icon: Icons.filter_list_off,
             title: 'No players match this filter',
             subtitle: 'Try a different status filter',
@@ -247,16 +253,15 @@ class _RosterListScreenState extends ConsumerState<RosterListScreen> {
         }
 
         return RefreshIndicator(
-          color: AppColors.primary,
+          color: AppColors.accent,
           onRefresh: () async {
             ref.invalidate(teamRosterProvider(teamId));
             await ref.read(teamRosterProvider(teamId).future);
           },
-          child: ListView.separated(
+          child: ListView.builder(
             physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(vertical: 8),
             itemCount: filtered.length,
-            separatorBuilder: (_, _) =>
-                const Divider(height: 1, indent: 72),
             itemBuilder: (_, i) {
               final entry = filtered[i];
               final playerId =

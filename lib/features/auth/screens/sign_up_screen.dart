@@ -38,24 +38,24 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   Future<void> _signUp() async {
     if (!_formKey.currentState!.validate()) return;
     try {
-      final hasSession = await ref.read(authNotifierProvider.notifier).signUp(
-            _emailController.text,
-            _passwordController.text,
-            _fullNameController.text,
-            _selectedRole,
-          );
+      final hasSession =
+          await ref.read(authNotifierProvider.notifier).signUp(
+                _emailController.text,
+                _passwordController.text,
+                _fullNameController.text,
+                _selectedRole,
+              );
       if (!mounted) return;
-      // No immediate session means email confirmation is required.
       if (!hasSession) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Account created! Check your email to confirm.'),
+            content:
+                Text('Account created! Check your email to confirm.'),
             duration: Duration(seconds: 6),
           ),
         );
         context.go(kSignInRoute);
       }
-      // If hasSession == true, GoRouter redirect fires automatically.
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -69,36 +69,47 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     final isLoading = ref.watch(authNotifierProvider).isLoading;
 
     return Scaffold(
-      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text('Create Account'),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.07),
+                blurRadius: 20,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: 8),
-                const Text(
-                  'Create account',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primary,
-                  ),
-                ),
+                const Text('Join your club', style: AppTextStyles.h2),
                 const SizedBox(height: 4),
-                Text(
-                  'Join your club on SquadSync',
-                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                const Text(
+                  'Create your SquadSync account',
+                  style: AppTextStyles.bodySmall,
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
                 // Full name
                 TextFormField(
                   controller: _fullNameController,
                   textInputAction: TextInputAction.next,
                   textCapitalization: TextCapitalization.words,
-                  decoration: const InputDecoration(labelText: 'Full name'),
+                  decoration:
+                      const InputDecoration(labelText: 'Full name'),
                   validator: Validators.fullName,
                   enabled: !isLoading,
                 ),
@@ -108,7 +119,8 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.next,
-                  decoration: const InputDecoration(labelText: 'Email'),
+                  decoration:
+                      const InputDecoration(labelText: 'Email'),
                   validator: Validators.email,
                   enabled: !isLoading,
                 ),
@@ -125,9 +137,10 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                         _obscurePassword
                             ? Icons.visibility_outlined
                             : Icons.visibility_off_outlined,
+                        color: AppColors.textSecondary,
                       ),
-                      onPressed: () =>
-                          setState(() => _obscurePassword = !_obscurePassword),
+                      onPressed: () => setState(
+                          () => _obscurePassword = !_obscurePassword),
                     ),
                   ),
                   validator: Validators.password,
@@ -147,9 +160,11 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                         _obscureConfirmPassword
                             ? Icons.visibility_outlined
                             : Icons.visibility_off_outlined,
+                        color: AppColors.textSecondary,
                       ),
-                      onPressed: () => setState(
-                          () => _obscureConfirmPassword = !_obscureConfirmPassword),
+                      onPressed: () => setState(() =>
+                          _obscureConfirmPassword =
+                              !_obscureConfirmPassword),
                     ),
                   ),
                   validator: (value) {
@@ -165,32 +180,26 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                 ),
                 const SizedBox(height: 24),
                 // Role selector
-                Text(
-                  'I am a...',
-                  style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                const Text(
+                  'I AM A...',
+                  style: AppTextStyles.label,
                 ),
                 const SizedBox(height: 8),
                 SegmentedButton<UserRole>(
                   segments: const [
                     ButtonSegment(
-                      value: UserRole.player,
-                      label: Text('Player'),
-                    ),
+                        value: UserRole.player, label: Text('Player')),
                     ButtonSegment(
-                      value: UserRole.coach,
-                      label: Text('Coach'),
-                    ),
+                        value: UserRole.coach, label: Text('Coach')),
                     ButtonSegment(
-                      value: UserRole.parent,
-                      label: Text('Parent'),
-                    ),
+                        value: UserRole.parent, label: Text('Parent')),
                   ],
                   selected: {_selectedRole},
                   multiSelectionEnabled: false,
                   onSelectionChanged: isLoading
                       ? null
-                      : (Set<UserRole> selection) =>
-                          setState(() => _selectedRole = selection.first),
+                      : (Set<UserRole> selection) => setState(
+                          () => _selectedRole = selection.first),
                   style: ButtonStyle(
                     foregroundColor: WidgetStateProperty.resolveWith(
                       (states) => states.contains(WidgetState.selected)
@@ -205,13 +214,12 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                   ),
                 ),
                 const SizedBox(height: 32),
-                // Create account button
+                // Create account button — teal accent to match Sign In
                 ElevatedButton(
                   onPressed: isLoading ? null : _signUp,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size.fromHeight(48),
+                    backgroundColor: AppColors.accent,
+                    foregroundColor: AppColors.primary,
                   ),
                   child: isLoading
                       ? const SizedBox(
@@ -225,14 +233,13 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                       : const Text('Create Account'),
                 ),
                 const SizedBox(height: 16),
-                // Sign in link
                 Center(
                   child: TextButton(
-                    onPressed: isLoading ? null : () => context.go(kSignInRoute),
+                    onPressed:
+                        isLoading ? null : () => context.go(kSignInRoute),
                     child: const Text('Already have an account? Sign in'),
                   ),
                 ),
-                const SizedBox(height: 32),
               ],
             ),
           ),

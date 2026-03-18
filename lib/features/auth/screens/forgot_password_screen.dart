@@ -16,7 +16,8 @@ class ForgotPasswordScreen extends ConsumerStatefulWidget {
       _ForgotPasswordScreenState();
 }
 
-class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
+class _ForgotPasswordScreenState
+    extends ConsumerState<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   bool _emailSent = false;
@@ -48,16 +49,36 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     final isLoading = ref.watch(authNotifierProvider).isLoading;
 
     return Scaffold(
-      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: _emailSent ? _SuccessView() : _FormView(
-            formKey: _formKey,
-            emailController: _emailController,
-            isLoading: isLoading,
-            onSubmit: _sendReset,
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text('Reset Password'),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.07),
+                blurRadius: 20,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
+          child: _emailSent
+              ? _SuccessView()
+              : _FormView(
+                  formKey: _formKey,
+                  emailController: _emailController,
+                  isLoading: isLoading,
+                  onSubmit: _sendReset,
+                ),
         ),
       ),
     );
@@ -84,19 +105,11 @@ class _FormView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: 8),
-          const Text(
-            'Reset password',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: AppColors.primary,
-            ),
-          ),
+          const Text('Forgot password?', style: AppTextStyles.h2),
           const SizedBox(height: 12),
-          Text(
+          const Text(
             "Enter your email address and we'll send you a link to reset your password.",
-            style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+            style: AppTextStyles.bodySmall,
           ),
           const SizedBox(height: 32),
           TextFormField(
@@ -111,11 +124,6 @@ class _FormView extends StatelessWidget {
           const SizedBox(height: 32),
           ElevatedButton(
             onPressed: isLoading ? null : onSubmit,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              minimumSize: const Size.fromHeight(48),
-            ),
             child: isLoading
                 ? const SizedBox(
                     height: 20,
@@ -137,21 +145,21 @@ class _SuccessView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Icon(Icons.check_circle, color: Colors.green, size: 72),
+        const Icon(Icons.check_circle, color: AppColors.success, size: 72),
         const SizedBox(height: 24),
         const Text(
           'Email sent!',
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style: AppTextStyles.h2,
         ),
         const SizedBox(height: 12),
-        Text(
+        const Text(
           'Check your inbox for a password reset link.',
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+          style: AppTextStyles.bodySmall,
         ),
         const SizedBox(height: 32),
         TextButton(
