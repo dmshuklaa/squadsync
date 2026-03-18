@@ -571,6 +571,105 @@ class RosterRepository {
     }
   }
 
+  // ── Guardian link management ──────────────────────────────────
+
+  /// Searches for a profile by [email] (case-insensitive).
+  /// Returns null if no profile is found.
+  Future<Profile?> searchProfileByEmail(String email) async {
+    final data = await supabase
+        .from('profiles')
+        .select(
+          'id, full_name, email, phone, avatar_url, role, club_id, '
+          'push_token, availability_this_week, created_at, updated_at',
+        )
+        .ilike('email', email.trim())
+        .maybeSingle();
+
+    if (data == null) return null;
+    return Profile.fromJson(data);
+  }
+
+  /// Creates a guardian link request (confirmed = false).
+  /// Throws if the link already exists.
+  Future<void> createGuardianLinkRequest({
+    required String playerProfileId,
+    required String guardianProfileId,
+    required GuardianPermission permissionLevel,
+  }) async {
+    final existing = await supabase
+        .from('guardian_links')
+        .select('id')
+        .eq('player_profile_id', playerProfileId)
+        .eq('guardian_profile_id', guardianProfileId)
+        .maybeSingle();
+
+    if (existing != null) {
+      throw Exception('This guardian is already linked to this player');
+    }
+
+    // No .select() to avoid RLS SELECT policy issues on insert
+    await supabase.from('guardian_links').insert({
+      'player_profile_id': playerProfileId,
+      'guardian_profile_id': guardianProfileId,
+      'permission_level': permissionLevel.toJson(),
+      'confirmed': false,
+    });
+  }
+
+  /// Confirms a pending guardian link (guardian accepts).
+  Future<void> confirmGuardianLink(String guardianLinkId) async {
+    await supabase
+        .from('guardian_links')
+        .update({'confirmed': true})
+        .eq('id', guardianLinkId)
+        .eq('guardian_profile_id', supabase.auth.currentUser!.id);
+  }
+
+  /// Declines and removes a pending guardian link (guardian declines).
+  Future<void> declineGuardianLink(String guardianLinkId) async {
+    await supabase
+        .from('guardian_links')
+        .delete()
+        .eq('id', guardianLinkId)
+        .eq('guardian_profile_id', supabase.auth.currentUser!.id);
+  }
+
+  /// Removes a confirmed or pending guardian link (admin or guardian).
+  Future<void> removeGuardianLink(String guardianLinkId) async {
+    await supabase
+        .from('guardian_links')
+        .delete()
+        .eq('id', guardianLinkId);
+  }
+
+  /// Returns unconfirmed guardian link requests where the current user
+  /// is the guardian, joining the player's profile fields.
+  Future<List<GuardianLink>> getPendingGuardianRequests() async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return [];
+
+    try {
+      final response = await supabase
+          .from('guardian_links')
+          .select(
+            'id, player_profile_id, guardian_profile_id, '
+            'permission_level, confirmed, created_at, '
+            'profiles!player_profile_id(full_name, avatar_url)',
+          )
+          .eq('guardian_profile_id', userId)
+          .eq('confirmed', false);
+
+      return (response as List).map((row) {
+        // Remap: the join is on player_profile_id, so profiles = player info.
+        // We store it in guardianFullName/guardianAvatarUrl but re-interpret
+        // in the UI as playerFullName/playerAvatarUrl.
+        return GuardianLink.fromJson(row as Map<String, dynamic>);
+      }).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   /// Returns all divisions for a club, ordered by display_order.
   Future<List<Division>> getDivisionsForClub(String clubId) async {
     final response = await supabase

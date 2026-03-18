@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:squadsync/core/theme/app_theme.dart';
 import 'package:squadsync/core/utils/error_mapper.dart';
+import 'package:squadsync/features/auth/providers/auth_provider.dart';
 import 'package:squadsync/features/onboarding/providers/onboarding_provider.dart';
 import 'package:squadsync/shared/widgets/squad_sync_logo.dart';
 
@@ -66,7 +67,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     if (!_joinFormKey.currentState!.validate()) return;
     try {
       await ref.read(onboardingNotifierProvider.notifier).joinClub(
-            _joinCodeController.text.trim(),
+            _joinCodeController.text.trim().toUpperCase(),
           );
     } on ClubNotFoundException {
       if (!mounted) return;
@@ -157,6 +158,22 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 ],
               ),
             ),
+
+            // ── Sign out escape hatch ─────────────────────────
+            Padding(
+              padding: const EdgeInsets.only(bottom: 32),
+              child: TextButton(
+                onPressed: () async {
+                  await ref
+                      .read(authNotifierProvider.notifier)
+                      .signOut();
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.textHint,
+                ),
+                child: const Text('Sign out'),
+              ),
+            ),
           ],
         ),
       ),
@@ -225,13 +242,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               const SizedBox(height: 32),
               ElevatedButton(
                 onPressed: isLoading ? null : _createClub,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: AppColors.primary,
+                ),
                 child: isLoading
                     ? const SizedBox(
                         height: 20,
                         width: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.white,
+                          color: AppColors.primary,
                         ),
                       )
                     : const Text('Create Club'),
@@ -314,13 +335,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: isLoading ? null : _joinClub,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: AppColors.primary,
+                ),
                 child: isLoading
                     ? const SizedBox(
                         height: 20,
                         width: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.white,
+                          color: AppColors.primary,
                         ),
                       )
                     : const Text('Join Club'),

@@ -128,29 +128,117 @@ class OnboardingNotifier extends _$OnboardingNotifier {
   /// Throws [ClubNotFoundException] when no club matches — callers should
   /// show an inline error, not a SnackBar.
   Future<void> joinClub(String joinCode) async {
+    // ignore: avoid_print
+    print('[OnboardingProvider] joinClub called with code: $joinCode');
     state = const AsyncLoading();
     try {
-      // 1. Look up club by join code
+      // 1. Look up club by join code (full row for logging)
+      // ignore: avoid_print
+      print('[OnboardingProvider] Looking up club with code: '
+          '${joinCode.toUpperCase()}');
       final result = await supabase
           .from('clubs')
-          .select('id')
+          .select()
           .ilike('join_code', joinCode.toUpperCase())
           .maybeSingle();
 
+      // ignore: avoid_print
+      print('[OnboardingProvider] Club lookup result: $result');
+
       if (result == null) {
+        // ignore: avoid_print
+        print('[OnboardingProvider] No club found for code: $joinCode');
         state = const AsyncData(null);
         throw const ClubNotFoundException();
       }
 
       final clubId = result['id'] as String;
+      // ignore: avoid_print
+      print('[OnboardingProvider] Found club: '
+          '${result['name']} id: $clubId');
 
       // 2. Update profile — keep existing role, just set club_id
+      final userId = supabase.auth.currentUser!.id;
+      final userEmail = supabase.auth.currentUser!.email;
+      // ignore: avoid_print
+      print('[OnboardingProvider] Updating profile $userId '
+          'with club_id: $clubId');
       await supabase
           .from('profiles')
           .update({'club_id': clubId})
-          .eq('id', supabase.auth.currentUser!.id);
+          .eq('id', userId);
+      // ignore: avoid_print
+      print('[OnboardingProvider] Profile updated successfully');
 
-      // 3. Trigger GoRouter re-evaluation (same mechanism as createClub)
+      // 3. Find the first team in the club and create/activate membership.
+      //
+      //    Three cases:
+      //    a) Player was never added → insert active membership.
+      //    b) Player was added via invite (status=pending) → update to active.
+      //    c) Player already has an active membership → do nothing.
+      //
+      //    Also delete any pending_players row for this email — the player has
+      //    now signed up so that shadow record is no longer needed.
+      final teamsResult = await supabase
+          .from('teams')
+          .select('id, divisions!inner(club_id)')
+          .eq('divisions.club_id', clubId)
+          .limit(1)
+          .maybeSingle();
+
+      // ignore: avoid_print
+      print('[OnboardingProvider] First team lookup: $teamsResult');
+
+      if (teamsResult != null) {
+        final teamId = teamsResult['id'] as String;
+
+        // Check for an existing membership in this team
+        final existingMembership = await supabase
+            .from('team_memberships')
+            .select('id, status')
+            .eq('team_id', teamId)
+            .eq('profile_id', userId)
+            .maybeSingle();
+
+        // ignore: avoid_print
+        print('[OnboardingProvider] Existing membership: $existingMembership');
+
+        if (existingMembership == null) {
+          // No membership — create one as active
+          await supabase.from('team_memberships').insert({
+            'team_id': teamId,
+            'profile_id': userId,
+            'status': 'active',
+          });
+          // ignore: avoid_print
+          print('[OnboardingProvider] Created active membership in team $teamId');
+        } else if (existingMembership['status'] != 'active') {
+          // Membership exists but is pending/inactive — activate it
+          await supabase
+              .from('team_memberships')
+              .update({'status': 'active'})
+              .eq('id', existingMembership['id'] as String);
+          // ignore: avoid_print
+          print('[OnboardingProvider] Activated existing membership '
+              '${existingMembership['id']}');
+        } else {
+          // ignore: avoid_print
+          print('[OnboardingProvider] Membership already active — no change');
+        }
+
+        // Clean up shadow pending_players row if one exists for this email
+        if (userEmail != null) {
+          await supabase
+              .from('pending_players')
+              .delete()
+              .eq('team_id', teamId)
+              .eq('email', userEmail);
+          // ignore: avoid_print
+          print('[OnboardingProvider] Cleaned up pending_players for $userEmail');
+        }
+      }
+
+      // 4. Trigger GoRouter re-evaluation (same mechanism as createClub)
       await supabase.auth.refreshSession();
 
       state = const AsyncData(null);
@@ -159,6 +247,10 @@ class OnboardingNotifier extends _$OnboardingNotifier {
       // the screen can show the inline error.
       rethrow;
     } catch (e, st) {
+      // ignore: avoid_print
+      print('[OnboardingProvider] joinClub error: $e');
+      // ignore: avoid_print
+      print('[OnboardingProvider] type: ${e.runtimeType}');
       state = AsyncError(e, st);
       rethrow;
     }

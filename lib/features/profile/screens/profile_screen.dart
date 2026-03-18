@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import 'package:squadsync/core/router/app_router.dart';
 import 'package:squadsync/core/supabase/supabase_client.dart';
 import 'package:squadsync/core/theme/app_theme.dart';
 import 'package:squadsync/features/auth/providers/auth_provider.dart';
+import 'package:squadsync/features/roster/providers/guardian_provider.dart';
 import 'package:squadsync/shared/widgets/avatar_widget.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -34,6 +37,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         (user?.userMetadata?['full_name'] as String?) ?? email;
     final role = _formatRole(
         (user?.userMetadata?['role'] as String?) ?? '');
+
+    // Guardian requests — only watch when logged in
+    final requestsAsync = ref.watch(pendingGuardianRequestsProvider);
+    final pendingCount =
+        requestsAsync.whenOrNull(data: (list) => list.length) ?? 0;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -101,6 +109,45 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
 
             const SizedBox(height: 16),
+
+            // ── Guardian requests banner (shown when pending > 0) ──
+            if (pendingCount > 0)
+              Container(
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.warningSurface,
+                  borderRadius: BorderRadius.circular(12),
+                  border:
+                      Border.all(color: AppColors.warning, width: 1),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.people_alt_outlined,
+                        color: AppColors.warning, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '$pendingCount guardian request${pendingCount == 1 ? '' : 's'} waiting for your response',
+                        style: AppTextStyles.bodySmall,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () =>
+                          context.push(kGuardianRequestsRoute),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.warning,
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(0, 0),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text('Review'),
+                    ),
+                  ],
+                ),
+              ),
+
+            if (pendingCount > 0) const SizedBox(height: 12),
 
             // ── Account section ────────────────────────────────
             Padding(
@@ -172,6 +219,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ],
                       ),
                     ),
+                    ListTile(
+                      leading: const Icon(Icons.family_restroom,
+                          color: AppColors.accent),
+                      title: const Text('Guardian requests'),
+                      trailing: pendingCount > 0
+                          ? Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: const BoxDecoration(
+                                color: AppColors.warning,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Text(
+                                pendingCount.toString(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            )
+                          : null,
+                      onTap: () =>
+                          context.push(kGuardianRequestsRoute),
+                    ),
+                    const Divider(height: 1, indent: 16, endIndent: 16),
                     ListTile(
                       leading: const Icon(Icons.logout,
                           color: AppColors.error),

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:squadsync/core/router/app_router.dart';
 import 'package:squadsync/core/supabase/supabase_client.dart';
 import 'package:squadsync/core/theme/app_theme.dart';
 import 'package:squadsync/core/utils/permission_helper.dart';
@@ -820,10 +821,17 @@ class _PlayerProfileScreenState extends ConsumerState<PlayerProfileScreen> {
               icon: const Icon(Icons.person_add_outlined),
               tooltip: 'Add guardian',
               onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content:
-                          Text('Add guardian — coming in Sprint 2.4')),
+                final profileData = ref
+                    .read(profileByIdProvider(profileId))
+                    .valueOrNull;
+                final displayName =
+                    profileData?.fullName ?? widget.playerId;
+                context.push(
+                  '/roster/player/${widget.playerId}/add-guardian',
+                  extra: AddGuardianArgs(
+                    playerProfileId: profileId,
+                    playerName: displayName,
+                  ),
                 );
               },
             )

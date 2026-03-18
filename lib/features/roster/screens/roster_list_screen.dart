@@ -56,7 +56,7 @@ class _RosterListScreenState extends ConsumerState<RosterListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Roster'),
+        title: const Text('Squad'),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         elevation: 0,

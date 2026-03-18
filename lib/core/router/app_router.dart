@@ -12,7 +12,9 @@ import 'package:squadsync/features/auth/screens/sign_up_screen.dart';
 import 'package:squadsync/features/events/screens/home_screen.dart';
 import 'package:squadsync/features/notifications/screens/notifications_screen.dart';
 import 'package:squadsync/features/onboarding/screens/onboarding_screen.dart';
+import 'package:squadsync/features/profile/screens/guardian_requests_screen.dart';
 import 'package:squadsync/features/profile/screens/profile_screen.dart';
+import 'package:squadsync/features/roster/screens/add_guardian_screen.dart';
 import 'package:squadsync/features/roster/screens/add_player_screen.dart';
 import 'package:squadsync/features/roster/screens/player_profile_screen.dart';
 import 'package:squadsync/features/roster/screens/roster_list_screen.dart';
@@ -36,6 +38,17 @@ class PlayerProfileArgs {
   final String teamId;
 }
 
+/// Arguments for the /roster/player/:id/add-guardian route.
+class AddGuardianArgs {
+  const AddGuardianArgs({
+    required this.playerProfileId,
+    required this.playerName,
+  });
+
+  final String playerProfileId;
+  final String playerName;
+}
+
 // ── Named route paths ────────────────────────────────────────
 const String kSignInRoute = '/sign-in';
 const String kSignUpRoute = '/sign-up';
@@ -47,6 +60,8 @@ const String kRosterAddPlayerRoute = '/roster/add-player';
 const String kPlayerProfileRoute = '/roster/player/:id';
 const String kNotificationsRoute = '/notifications';
 const String kProfileRoute = '/profile';
+const String kAddGuardianRoute = '/roster/player/:id/add-guardian';
+const String kGuardianRequestsRoute = '/profile/guardian-requests';
 
 // ── Auth-aware ChangeNotifier for GoRouter refreshListenable ─
 
@@ -186,6 +201,18 @@ GoRouter appRouter(AppRouterRef ref) {
                         teamId: args.teamId,
                       );
                     },
+                    routes: [
+                      GoRoute(
+                        path: 'add-guardian',
+                        builder: (context, state) {
+                          final args = state.extra as AddGuardianArgs;
+                          return AddGuardianScreen(
+                            playerProfileId: args.playerProfileId,
+                            playerName: args.playerName,
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -204,6 +231,13 @@ GoRouter appRouter(AppRouterRef ref) {
               GoRoute(
                 path: kProfileRoute,
                 builder: (context, state) => const ProfileScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'guardian-requests',
+                    builder: (context, state) =>
+                        const GuardianRequestsScreen(),
+                  ),
+                ],
               ),
             ],
           ),

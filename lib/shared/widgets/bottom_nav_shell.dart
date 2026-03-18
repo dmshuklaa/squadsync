@@ -32,7 +32,7 @@ class BottomNavShell extends StatelessWidget {
           NavigationDestination(
             icon: Icon(Icons.group_outlined),
             selectedIcon: Icon(Icons.group, color: AppColors.accent),
-            label: 'Roster',
+            label: 'Team',
           ),
           NavigationDestination(
             icon: Icon(Icons.notifications_outlined),
