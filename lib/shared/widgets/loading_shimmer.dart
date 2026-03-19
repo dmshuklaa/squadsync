@@ -21,6 +21,32 @@ class RosterShimmer extends StatelessWidget {
   }
 }
 
+/// Shimmer placeholder for the home screen upcoming events list.
+class HomeEventShimmer extends StatelessWidget {
+  const HomeEventShimmer({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Shimmer.fromColors(
+      baseColor: AppColors.border,
+      highlightColor: AppColors.accentSurface,
+      child: Column(
+        children: List.generate(
+          3,
+          (_) => Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            height: 140,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ShimmerCard extends StatelessWidget {
   const _ShimmerCard();
 

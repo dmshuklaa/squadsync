@@ -30,6 +30,20 @@ class _RosterListScreenState extends ConsumerState<RosterListScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    // If teams are already cached when the screen opens, ref.listen won't fire
+    // for the initial value. Use a post-frame callback so we can safely call
+    // ref.read and setState after the first build completes.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final teams = ref.read(userTeamsProvider).valueOrNull;
+      if (teams != null && teams.isNotEmpty && _selectedTeamId == null) {
+        setState(() => _selectedTeamId = teams.first.id);
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final teamsAsync = ref.watch(userTeamsProvider);
     final profileAsync = ref.watch(currentProfileProvider);
@@ -122,28 +136,35 @@ class _RosterListScreenState extends ConsumerState<RosterListScreen> {
         itemBuilder: (_, i) {
           final team = teams[i];
           final isSelected = team.id == _selectedTeamId;
-          final label = team.divisionName != null
-              ? '${team.divisionName} · ${team.name}'
-              : team.name;
+          final divName = team.divisionName ?? 'Division';
+          final teamName = team.name;
+          // ignore: avoid_print
+          print('[RosterScreen] chip team: ${team.name} div: ${team.divisionName}');
 
           return RawChip(
-            label: Text(label),
+            label: Text(
+              '$divName · $teamName',
+              style: TextStyle(
+                color: isSelected ? AppColors.primary : Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
             selected: isSelected,
             showCheckmark: false,
             avatar: null,
             deleteIcon: null,
-            backgroundColor: Colors.white.withValues(alpha: 0.15),
+            backgroundColor: isSelected
+                ? AppColors.accent
+                : Colors.white.withValues(alpha: 0.2),
             selectedColor: AppColors.accent,
-            side: isSelected
-                ? BorderSide.none
-                : BorderSide(
-                    color: Colors.white.withValues(alpha: 0.4)),
-            labelStyle: TextStyle(
-              color: isSelected ? AppColors.primary : Colors.white,
-              fontWeight:
-                  isSelected ? FontWeight.w700 : FontWeight.w500,
-              fontSize: 13,
+            side: BorderSide(
+              color: isSelected
+                  ? Colors.transparent
+                  : Colors.white.withValues(alpha: 0.6),
+              width: 1.5,
             ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             onSelected: (_) {
               setState(() => _selectedTeamId = team.id);
             },

@@ -1,4 +1,4 @@
-// Dart equivalents of the Postgres enums defined in 001_core_schema.sql.
+// Dart equivalents of the Postgres enums defined in the migrations.
 
 enum UserRole {
   clubAdmin,
@@ -91,6 +91,100 @@ enum GuardianPermission {
         return 'view';
       case GuardianPermission.manage:
         return 'manage';
+    }
+  }
+}
+
+enum EventType {
+  game,
+  training;
+
+  static EventType fromString(String value) {
+    switch (value) {
+      case 'game':
+        return EventType.game;
+      case 'training':
+        return EventType.training;
+      default:
+        throw ArgumentError('Unknown EventType: $value');
+    }
+  }
+
+  String toJson() {
+    switch (this) {
+      case EventType.game:
+        return 'game';
+      case EventType.training:
+        return 'training';
+    }
+  }
+
+  String get label {
+    switch (this) {
+      case EventType.game:
+        return 'Game';
+      case EventType.training:
+        return 'Training';
+    }
+  }
+}
+
+enum EventStatus {
+  scheduled,
+  cancelled,
+  completed;
+
+  static EventStatus fromString(String value) {
+    switch (value) {
+      case 'scheduled':
+        return EventStatus.scheduled;
+      case 'cancelled':
+        return EventStatus.cancelled;
+      case 'completed':
+        return EventStatus.completed;
+      default:
+        throw ArgumentError('Unknown EventStatus: $value');
+    }
+  }
+
+  String toJson() {
+    switch (this) {
+      case EventStatus.scheduled:
+        return 'scheduled';
+      case EventStatus.cancelled:
+        return 'cancelled';
+      case EventStatus.completed:
+        return 'completed';
+    }
+  }
+}
+
+enum RsvpStatus {
+  going,
+  notGoing,
+  maybe;
+
+  static RsvpStatus fromString(String value) {
+    switch (value) {
+      case 'going':
+        return RsvpStatus.going;
+      case 'not_going':
+        return RsvpStatus.notGoing;
+      case 'maybe':
+        return RsvpStatus.maybe;
+      default:
+        throw ArgumentError('Unknown RsvpStatus: $value');
+    }
+  }
+
+  String toJson() {
+    switch (this) {
+      case RsvpStatus.going:
+        return 'going';
+      case RsvpStatus.notGoing:
+        return 'not_going';
+      case RsvpStatus.maybe:
+        return 'maybe';
     }
   }
 }

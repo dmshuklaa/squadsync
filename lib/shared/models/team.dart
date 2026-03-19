@@ -19,14 +19,16 @@ class Team {
   final String? divisionName;
 
   factory Team.fromJson(Map<String, dynamic> json) {
-    final divisions = json['divisions'] as Map<String, dynamic>?;
     return Team(
       id: json['id'] as String,
-      divisionId: json['division_id'] as String,
-      name: json['name'] as String,
+      divisionId: json['division_id'] as String? ?? '',
+      name: json['name'] as String? ?? 'Unknown Team',
       season: json['season'] as String?,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      divisionName: divisions?['name'] as String?,
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'] as String)
+          : DateTime.now(),
+      divisionName:
+          (json['divisions'] as Map<String, dynamic>?)?['name'] as String?,
     );
   }
 

@@ -45,7 +45,7 @@ class RosterRepository {
 
   /// Returns teams accessible to [profileId] based on [role]:
   /// - club_admin / coach: all teams in the club (via divisions join)
-  /// - player / parent: only teams where they have a membership
+  /// - player / parent: only teams where they have an active membership
   ///
   /// Each [Team] has [divisionName] populated from the joined divisions row.
   Future<List<Team>> getTeamsForUser({
@@ -53,28 +53,61 @@ class RosterRepository {
     required String clubId,
     required UserRole role,
   }) async {
+    // ignore: avoid_print
+    print('[RosterRepo] getTeamsForUser: profileId=$profileId role=$role');
+
+    List<Team> teams;
+
     if (role == UserRole.clubAdmin || role == UserRole.coach) {
+      // Step 1: fetch club_id directly from the profile row to avoid relying
+      // on the caller-supplied value which may be stale for join-code admins.
+      final profileResponse = await supabase
+          .from('profiles')
+          .select('club_id')
+          .eq('id', profileId)
+          .single();
+      final resolvedClubId = profileResponse['club_id'] as String?;
+      // ignore: avoid_print
+      print('[RosterRepo] resolved clubId=$resolvedClubId');
+
+      if (resolvedClubId == null) return [];
+
+      // Step 2: fetch all teams in that club via divisions!inner so that
+      // RLS-blocked division rows are excluded (inner join) rather than
+      // returned as nulls and then silently filtered out.
       final response = await supabase
           .from('teams')
-          .select('id, division_id, name, season, created_at, divisions(name)')
-          .eq('divisions.club_id', clubId)
-          .order('name');
+          .select(
+            'id, name, division_id, season, created_at, '
+            'divisions!inner(id, name, display_order, club_id)',
+          )
+          .eq('divisions.club_id', resolvedClubId)
+          .order('display_order', referencedTable: 'divisions', ascending: true);
 
-      return (response as List)
+      // ignore: avoid_print
+      print('[RosterRepo] teams raw response: $response');
+
+      teams = (response as List)
           .map((row) => Team.fromJson(row as Map<String, dynamic>))
-          .where((t) => t.divisionName != null)
           .toList();
     } else {
-      // player / parent: only teams they belong to
+      // player / parent: only active-membership teams
       final response = await supabase
           .from('team_memberships')
           .select(
-            'teams(id, division_id, name, season, created_at, divisions(name))',
+            'team_id, '
+            'teams!inner('
+            'id, division_id, name, season, created_at, '
+            'divisions!inner(id, name, display_order)'
+            ')',
           )
           .eq('profile_id', profileId)
-          .neq('status', MembershipStatus.archived.toJson());
+          .eq('status', 'active');
 
-      return (response as List)
+      // ignore: avoid_print
+      print('[RosterRepo] teams raw response: $response');
+
+      teams = (response as List)
           .map((row) {
             final teamData = row['teams'] as Map<String, dynamic>?;
             return teamData == null ? null : Team.fromJson(teamData);
@@ -82,6 +115,38 @@ class RosterRepository {
           .whereType<Team>()
           .toList();
     }
+
+    // Fallback: if the role-based query returned nothing (e.g. admin1 who
+    // joined via join code has a team_membership but the club-level teams
+    // query returned empty due to RLS or division filter), try fetching
+    // via team_memberships directly for any active membership.
+    if (teams.isEmpty) {
+      // ignore: avoid_print
+      print('[RosterRepo] Primary query empty, trying membership fallback');
+      final fallback = await supabase
+          .from('team_memberships')
+          .select(
+            'teams!inner('
+            'id, division_id, name, season, created_at, '
+            'divisions!inner(id, name, display_order)'
+            ')',
+          )
+          .eq('profile_id', profileId)
+          .eq('status', 'active');
+
+      // ignore: avoid_print
+      print('[RosterRepo] Fallback result: $fallback');
+
+      teams = (fallback as List)
+          .map((row) {
+            final teamData = row['teams'] as Map<String, dynamic>?;
+            return teamData == null ? null : Team.fromJson(teamData);
+          })
+          .whereType<Team>()
+          .toList();
+    }
+
+    return teams;
   }
 
   // ── Add player ───────────────────────────────────────────────

@@ -9,6 +9,9 @@ import 'package:squadsync/core/supabase/supabase_client.dart';
 import 'package:squadsync/features/auth/screens/forgot_password_screen.dart';
 import 'package:squadsync/features/auth/screens/sign_in_screen.dart';
 import 'package:squadsync/features/auth/screens/sign_up_screen.dart';
+import 'package:squadsync/features/events/screens/create_event_screen.dart';
+import 'package:squadsync/features/events/screens/event_detail_screen.dart';
+import 'package:squadsync/features/events/screens/event_list_screen.dart';
 import 'package:squadsync/features/events/screens/home_screen.dart';
 import 'package:squadsync/features/notifications/screens/notifications_screen.dart';
 import 'package:squadsync/features/onboarding/screens/onboarding_screen.dart';
@@ -62,6 +65,9 @@ const String kNotificationsRoute = '/notifications';
 const String kProfileRoute = '/profile';
 const String kAddGuardianRoute = '/roster/player/:id/add-guardian';
 const String kGuardianRequestsRoute = '/profile/guardian-requests';
+const String kEventListRoute = '/home/events';
+const String kEventDetailRoute = '/home/events/:id';
+const String kCreateEventRoute = '/home/events/create';
 
 // ── Auth-aware ChangeNotifier for GoRouter refreshListenable ─
 
@@ -176,6 +182,26 @@ GoRouter appRouter(AppRouterRef ref) {
               GoRoute(
                 path: kHomeRoute,
                 builder: (context, state) => const HomeScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'events',
+                    builder: (context, state) => const EventListScreen(),
+                    routes: [
+                      GoRoute(
+                        path: 'create',
+                        builder: (context, state) => CreateEventScreen(
+                          teamId: state.extra as String?,
+                        ),
+                      ),
+                      GoRoute(
+                        path: ':id',
+                        builder: (context, state) => EventDetailScreen(
+                          eventId: state.pathParameters['id']!,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ],
           ),
