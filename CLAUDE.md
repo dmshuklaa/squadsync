@@ -216,7 +216,7 @@ Functions:
 ## sprint progress
 Sprint 1 — Foundation & Auth        [x]
 Sprint 2 — Roster Management        [x]
-Sprint 3 — Events & Fill-in         [ ]
+Sprint 3 — Events & Fill-in         [x]
 Sprint 4 — Chat & Notifications     [ ]
 Sprint 5 — Polish & App Store Prep  [ ]
 
