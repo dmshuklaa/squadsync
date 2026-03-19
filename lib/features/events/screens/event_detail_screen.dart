@@ -564,13 +564,15 @@ class _FillInButton extends ConsumerWidget {
       final teamData = await ref
           .read(rosterRepositoryProvider)
           .getTeamById(event.teamId);
+      final teamDivisionId = teamData?.divisionId ?? '';
+      print('[EventDetail] teamId: ${event.teamId} → divisionId: $teamDivisionId');
       if (!context.mounted) return;
       router.push(
         kRequestFillInRoute,
         extra: FillInArgs(
           eventId: event.id,
           eventTitle: event.title,
-          targetDivisionId: teamData?.divisionId ?? '',
+          targetDivisionId: teamDivisionId,
         ),
       );
     } catch (_) {

@@ -53,7 +53,9 @@ class FillInRepository {
     required String targetDivisionId,
     required String eventId,
   }) async {
-    // Step 1: get source divisions that may fill in for targetDivisionId
+    print('[FillIn] getEligiblePlayers — clubId=$clubId targetDivisionId=$targetDivisionId eventId=$eventId');
+
+    // Step 1: source division IDs from enabled fill-in rules
     final rulesResponse = await supabase
         .from('fill_in_rules')
         .select('source_division_id')
@@ -61,13 +63,41 @@ class FillInRepository {
         .eq('club_id', clubId)
         .eq('enabled', true);
 
-    final sourceDivisions = (rulesResponse as List)
+    final sourceDivisionIds = (rulesResponse as List)
         .map((r) => r['source_division_id'] as String)
         .toList();
 
-    if (sourceDivisions.isEmpty) return [];
+    print('[FillIn] sourceDivisionIds: $sourceDivisionIds');
+    if (sourceDivisionIds.isEmpty) return [];
 
-    // Step 2: players already in event roster
+    // Step 2: team IDs in those source divisions
+    final teamsResponse = await supabase
+        .from('teams')
+        .select('id')
+        .inFilter('division_id', sourceDivisionIds);
+
+    final teamIds = (teamsResponse as List)
+        .map((t) => t['id'] as String)
+        .toList();
+
+    print('[FillIn] teamIds in source divisions: $teamIds');
+    if (teamIds.isEmpty) return [];
+
+    // Step 3: active player IDs in those teams
+    final membersResponse = await supabase
+        .from('team_memberships')
+        .select('profile_id')
+        .inFilter('team_id', teamIds)
+        .eq('status', 'active');
+
+    final allCandidateIds = (membersResponse as List)
+        .map((r) => r['profile_id'] as String)
+        .toSet();
+
+    print('[FillIn] active player candidates: ${allCandidateIds.length}');
+    if (allCandidateIds.isEmpty) return [];
+
+    // Step 4: already-rostered player IDs for this event
     final rosterResponse = await supabase
         .from('event_roster')
         .select('profile_id')
@@ -76,7 +106,9 @@ class FillInRepository {
         .map((r) => r['profile_id'] as String)
         .toSet();
 
-    // Step 3: players with pending fill-in request for this event
+    print('[FillIn] already rostered: ${rosteredIds.length}');
+
+    // Step 5: players with a pending fill-in request for this event
     final pendingResponse = await supabase
         .from('fill_in_requests')
         .select('player_id')
@@ -86,31 +118,28 @@ class FillInRepository {
         .map((r) => r['player_id'] as String)
         .toSet();
 
-    // Step 4: get active players in source divisions
-    final membersResponse = await supabase
-        .from('team_memberships')
-        .select('profile_id, teams!inner(division_id)')
-        .eq('status', 'active')
-        .inFilter('teams.division_id', sourceDivisions);
+    print('[FillIn] already pending: ${pendingIds.length}');
 
-    final candidateIds = (membersResponse as List)
-        .map((r) => r['profile_id'] as String)
+    // Step 6: filter out rostered/pending, then fetch available profiles
+    final eligibleIds = allCandidateIds
         .where((id) => !rosteredIds.contains(id) && !pendingIds.contains(id))
-        .toSet()
         .toList();
 
-    if (candidateIds.isEmpty) return [];
+    print('[FillIn] eligibleIds after exclusions: ${eligibleIds.length}');
+    if (eligibleIds.isEmpty) return [];
 
-    // Step 5: fetch profiles for candidates with availability
     final profilesResponse = await supabase
         .from('profiles')
         .select()
-        .inFilter('id', candidateIds)
+        .inFilter('id', eligibleIds)
         .eq('availability_this_week', true);
 
-    return (profilesResponse as List)
+    final result = (profilesResponse as List)
         .map((row) => Profile.fromJson(row as Map<String, dynamic>))
         .toList();
+
+    print('[FillIn] final eligible players (available this week): ${result.length}');
+    return result;
   }
 
   Future<int> getFillInCountThisSeason(
