@@ -1,6 +1,7 @@
 import 'package:squadsync/core/supabase/supabase_client.dart';
 import 'package:squadsync/shared/models/enums.dart';
 import 'package:squadsync/shared/models/event.dart';
+import 'package:squadsync/shared/models/event_roster_entry.dart';
 import 'package:squadsync/shared/models/event_rsvp.dart';
 
 class EventsRepository {
@@ -52,7 +53,8 @@ class EventsRepository {
     return Event.fromJson(data);
   }
 
-  /// Creates a new event. Returns the created [Event].
+  /// Creates a new event and auto-adds all active team members to event_roster.
+  /// Returns the created [Event].
   Future<Event> createEvent({
     required String teamId,
     required String title,
@@ -81,7 +83,27 @@ class EventsRepository {
         .select()
         .single();
 
-    return Event.fromJson(data);
+    final event = Event.fromJson(data);
+
+    // Auto-add all active team members to event_roster
+    final memberships = await supabase
+        .from('team_memberships')
+        .select('profile_id')
+        .eq('team_id', teamId)
+        .eq('status', 'active');
+
+    if ((memberships as List).isNotEmpty) {
+      final rosterRows = memberships
+          .map((m) => {
+                'event_id': event.id,
+                'profile_id': m['profile_id'] as String,
+                'is_fill_in': false,
+              })
+          .toList();
+      await supabase.from('event_roster').insert(rosterRows);
+    }
+
+    return event;
   }
 
   /// Updates the status of an event (e.g. cancelled, completed).
@@ -137,5 +159,28 @@ class EventsRepository {
       'status': status.toJson(),
       'responded_at': DateTime.now().toIso8601String(),
     }, onConflict: 'event_id,profile_id');
+  }
+
+  /// Returns RSVP counts per status for [eventId].
+  Future<Map<RsvpStatus, int>> getRsvpCounts(String eventId) async {
+    final rsvps = await getRsvpsForEvent(eventId);
+    return {
+      RsvpStatus.going: rsvps.where((r) => r.status == RsvpStatus.going).length,
+      RsvpStatus.notGoing:
+          rsvps.where((r) => r.status == RsvpStatus.notGoing).length,
+      RsvpStatus.maybe: rsvps.where((r) => r.status == RsvpStatus.maybe).length,
+    };
+  }
+
+  /// Returns the event roster for [eventId], joining profile name and avatar.
+  Future<List<EventRosterEntry>> getEventRoster(String eventId) async {
+    final response = await supabase
+        .from('event_roster')
+        .select('*, profiles(full_name, avatar_url)')
+        .eq('event_id', eventId);
+
+    return (response as List)
+        .map((row) => EventRosterEntry.fromJson(row as Map<String, dynamic>))
+        .toList();
   }
 }

@@ -66,8 +66,8 @@ const String kProfileRoute = '/profile';
 const String kAddGuardianRoute = '/roster/player/:id/add-guardian';
 const String kGuardianRequestsRoute = '/profile/guardian-requests';
 const String kEventListRoute = '/home/events';
-const String kEventDetailRoute = '/home/events/:id';
-const String kCreateEventRoute = '/home/events/create';
+const String kEventDetailRoute = '/events/:id';
+const String kCreateEventRoute = '/events/create';
 
 // ── Auth-aware ChangeNotifier for GoRouter refreshListenable ─
 
@@ -157,6 +157,18 @@ GoRouter appRouter(AppRouterRef ref) {
     },
     routes: [
       GoRoute(
+        path: kCreateEventRoute,
+        builder: (context, state) => CreateEventScreen(
+          teamId: state.extra as String?,
+        ),
+      ),
+      GoRoute(
+        path: kEventDetailRoute,
+        builder: (context, state) => EventDetailScreen(
+          eventId: state.pathParameters['id']!,
+        ),
+      ),
+      GoRoute(
         path: kSignInRoute,
         builder: (context, state) => const SignInScreen(),
       ),
@@ -186,20 +198,6 @@ GoRouter appRouter(AppRouterRef ref) {
                   GoRoute(
                     path: 'events',
                     builder: (context, state) => const EventListScreen(),
-                    routes: [
-                      GoRoute(
-                        path: 'create',
-                        builder: (context, state) => CreateEventScreen(
-                          teamId: state.extra as String?,
-                        ),
-                      ),
-                      GoRoute(
-                        path: ':id',
-                        builder: (context, state) => EventDetailScreen(
-                          eventId: state.pathParameters['id']!,
-                        ),
-                      ),
-                    ],
                   ),
                 ],
               ),

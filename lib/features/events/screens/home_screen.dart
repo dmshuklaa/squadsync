@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import 'package:squadsync/core/router/app_router.dart';
 import 'package:squadsync/core/theme/app_theme.dart';
 import 'package:squadsync/features/events/providers/events_providers.dart';
 import 'package:squadsync/features/events/screens/widgets/event_card.dart';
 import 'package:squadsync/features/roster/providers/roster_providers.dart';
+import 'package:squadsync/shared/models/enums.dart';
+import 'package:squadsync/shared/widgets/avatar_widget.dart';
 import 'package:squadsync/shared/widgets/empty_state_widget.dart';
 import 'package:squadsync/shared/widgets/loading_shimmer.dart';
 
@@ -22,6 +26,14 @@ class HomeScreen extends ConsumerWidget {
     final firstName = profileAsync.whenOrNull(
       data: (p) => p.fullName.split(' ').first,
     );
+    final avatarUrl = profileAsync.whenOrNull(data: (p) => p.avatarUrl);
+
+    final canManage = profileAsync.whenOrNull(
+          data: (profile) =>
+              profile.role == UserRole.clubAdmin ||
+              profile.role == UserRole.coach,
+        ) ??
+        false;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -29,7 +41,7 @@ class HomeScreen extends ConsumerWidget {
         slivers: [
           // ── Navy curved header ─────────────────────────────
           SliverToBoxAdapter(
-            child: _buildHeader(greeting, firstName),
+            child: _buildHeader(context, greeting, firstName, avatarUrl),
           ),
 
           // ── Quick stats ────────────────────────────────────
@@ -43,10 +55,10 @@ class HomeScreen extends ConsumerWidget {
             ),
           ),
 
-          // ── Upcoming events ────────────────────────────────
+          // ── Upcoming events section header ─────────────────
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
               child: Row(
                 children: [
                   Container(
@@ -59,6 +71,16 @@ class HomeScreen extends ConsumerWidget {
                   ),
                   const SizedBox(width: 8),
                   const Text('Upcoming events', style: AppTextStyles.h3),
+                  const Spacer(),
+                  if (canManage)
+                    IconButton(
+                      icon: const Icon(
+                        Icons.add_circle_outline,
+                        color: AppColors.accent,
+                      ),
+                      tooltip: 'Create event',
+                      onPressed: () => context.push(kCreateEventRoute),
+                    ),
                 ],
               ),
             ),
@@ -74,7 +96,8 @@ class HomeScreen extends ConsumerWidget {
             error: (e, _) => SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Center(child: Text('Error: $e', style: AppTextStyles.bodySmall)),
+                child: Center(
+                    child: Text('Error: $e', style: AppTextStyles.bodySmall)),
               ),
             ),
             data: (events) {
@@ -85,7 +108,8 @@ class HomeScreen extends ConsumerWidget {
                     child: EmptyStateWidget(
                       icon: Icons.event_outlined,
                       title: 'No upcoming events',
-                      subtitle: 'Events will appear here when a coach adds them',
+                      subtitle:
+                          'Events will appear here when a coach adds them',
                     ),
                   ),
                 );
@@ -94,7 +118,10 @@ class HomeScreen extends ConsumerWidget {
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                 sliver: SliverList.builder(
                   itemCount: events.length,
-                  itemBuilder: (_, i) => EventCard(event: events[i]),
+                  itemBuilder: (_, i) => EventCard(
+                    event: events[i],
+                    onTap: () => context.push('/events/${events[i].id}'),
+                  ),
                 ),
               );
             },
@@ -104,7 +131,12 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildHeader(String greeting, String? firstName) {
+  Widget _buildHeader(
+    BuildContext context,
+    String greeting,
+    String? firstName,
+    String? avatarUrl,
+  ) {
     final today = DateFormat('EEEE, d MMMM').format(DateTime.now());
 
     return Container(
@@ -116,19 +148,31 @@ class HomeScreen extends ConsumerWidget {
         ),
       ),
       padding: const EdgeInsets.fromLTRB(24, 56, 24, 28),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            firstName != null ? '$greeting, $firstName' : greeting,
-            style: AppTextStyles.h2.copyWith(color: Colors.white),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            today,
-            style: AppTextStyles.bodySmall.copyWith(
-              color: Colors.white.withValues(alpha: 0.7),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  firstName != null ? '$greeting, $firstName' : greeting,
+                  style: AppTextStyles.h2.copyWith(color: Colors.white),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  today,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: Colors.white.withValues(alpha: 0.7),
+                  ),
+                ),
+              ],
             ),
+          ),
+          AvatarWidget(
+            size: 44,
+            avatarUrl: avatarUrl,
+            fullName: firstName ?? '?',
           ),
         ],
       ),
@@ -156,8 +200,10 @@ class _QuickStats extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final teamCount = teamsAsync.whenOrNull(data: (t) => (t as List).length) ?? 0;
-    final eventCount = upcomingAsync.whenOrNull(data: (e) => (e as List).length) ?? 0;
+    final teamCount =
+        teamsAsync.whenOrNull(data: (t) => (t as List).length) ?? 0;
+    final eventCount =
+        upcomingAsync.whenOrNull(data: (e) => (e as List).length) ?? 0;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 20),

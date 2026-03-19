@@ -4,6 +4,7 @@ import 'package:squadsync/features/events/data/events_repository.dart';
 import 'package:squadsync/features/roster/providers/roster_providers.dart';
 import 'package:squadsync/shared/models/enums.dart';
 import 'package:squadsync/shared/models/event.dart';
+import 'package:squadsync/shared/models/event_roster_entry.dart';
 import 'package:squadsync/shared/models/event_rsvp.dart';
 
 part 'events_providers.g.dart';
@@ -81,6 +82,28 @@ Future<EventRsvp?> myRsvp(
   return repo.getMyRsvp(eventId);
 }
 
+// ── RSVP counts for an event ──────────────────────────────────
+
+@riverpod
+Future<Map<RsvpStatus, int>> rsvpCounts(
+  RsvpCountsRef ref,
+  String eventId,
+) async {
+  final repo = ref.watch(eventsRepositoryProvider);
+  return repo.getRsvpCounts(eventId);
+}
+
+// ── Event roster ──────────────────────────────────────────────
+
+@riverpod
+Future<List<EventRosterEntry>> eventRoster(
+  EventRosterRef ref,
+  String eventId,
+) async {
+  final repo = ref.watch(eventsRepositoryProvider);
+  return repo.getEventRoster(eventId);
+}
+
 // ── RSVP mutation notifier ────────────────────────────────────
 
 @riverpod
@@ -98,6 +121,7 @@ class RsvpNotifier extends _$RsvpNotifier {
       await repo.upsertRsvp(eventId: eventId, status: status);
       ref.invalidate(myRsvpProvider(eventId));
       ref.invalidate(eventRsvpsProvider(eventId));
+      ref.invalidate(rsvpCountsProvider(eventId));
       state = const AsyncData(null);
     } catch (e, st) {
       state = AsyncError(e, st);
