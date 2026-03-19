@@ -13,6 +13,9 @@ import 'package:squadsync/features/events/screens/create_event_screen.dart';
 import 'package:squadsync/features/events/screens/event_detail_screen.dart';
 import 'package:squadsync/features/events/screens/event_list_screen.dart';
 import 'package:squadsync/features/events/screens/home_screen.dart';
+import 'package:squadsync/features/fill_in/screens/fill_in_rules_screen.dart';
+import 'package:squadsync/features/fill_in/screens/request_fill_in_screen.dart';
+import 'package:squadsync/features/fill_in/screens/respond_fill_in_screen.dart';
 import 'package:squadsync/features/notifications/screens/notifications_screen.dart';
 import 'package:squadsync/features/onboarding/screens/onboarding_screen.dart';
 import 'package:squadsync/features/profile/screens/guardian_requests_screen.dart';
@@ -52,6 +55,19 @@ class AddGuardianArgs {
   final String playerName;
 }
 
+/// Arguments for the /fill-in/request route.
+class FillInArgs {
+  const FillInArgs({
+    required this.eventId,
+    required this.eventTitle,
+    required this.targetDivisionId,
+  });
+
+  final String eventId;
+  final String eventTitle;
+  final String targetDivisionId;
+}
+
 // ── Named route paths ────────────────────────────────────────
 const String kSignInRoute = '/sign-in';
 const String kSignUpRoute = '/sign-up';
@@ -68,6 +84,9 @@ const String kGuardianRequestsRoute = '/profile/guardian-requests';
 const String kEventListRoute = '/home/events';
 const String kEventDetailRoute = '/events/:id';
 const String kCreateEventRoute = '/events/create';
+const String kFillInRulesRoute = '/profile/fill-in-rules';
+const String kRequestFillInRoute = '/fill-in/request';
+const String kRespondFillInRoute = '/fill-in/respond/:id';
 
 // ── Auth-aware ChangeNotifier for GoRouter refreshListenable ─
 
@@ -169,6 +188,23 @@ GoRouter appRouter(AppRouterRef ref) {
         ),
       ),
       GoRoute(
+        path: kRequestFillInRoute,
+        builder: (context, state) {
+          final args = state.extra as FillInArgs;
+          return RequestFillInScreen(
+            eventId: args.eventId,
+            eventTitle: args.eventTitle,
+            targetDivisionId: args.targetDivisionId,
+          );
+        },
+      ),
+      GoRoute(
+        path: kRespondFillInRoute,
+        builder: (context, state) => RespondFillInScreen(
+          requestId: state.pathParameters['id']!,
+        ),
+      ),
+      GoRoute(
         path: kSignInRoute,
         builder: (context, state) => const SignInScreen(),
       ),
@@ -260,6 +296,11 @@ GoRouter appRouter(AppRouterRef ref) {
                     path: 'guardian-requests',
                     builder: (context, state) =>
                         const GuardianRequestsScreen(),
+                  ),
+                  GoRoute(
+                    path: 'fill-in-rules',
+                    builder: (context, state) =>
+                        const FillInRulesScreen(),
                   ),
                 ],
               ),

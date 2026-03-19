@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:squadsync/core/router/app_router.dart';
+import 'package:squadsync/shared/models/enums.dart';
 import 'package:squadsync/core/supabase/supabase_client.dart';
 import 'package:squadsync/core/theme/app_theme.dart';
 import 'package:squadsync/features/auth/providers/auth_provider.dart';
@@ -243,6 +244,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       onTap: () =>
                           context.push(kGuardianRequestsRoute),
                     ),
+                    if ((user?.userMetadata?['role'] as String?) ==
+                        UserRole.clubAdmin.toJson()) ...[
+                      const Divider(height: 1, indent: 16, endIndent: 16),
+                      ListTile(
+                        leading: const Icon(Icons.swap_horiz,
+                            color: AppColors.accent),
+                        title: const Text('Fill-in rules'),
+                        trailing: const Icon(Icons.chevron_right,
+                            color: AppColors.textHint),
+                        onTap: () =>
+                            context.push(kFillInRulesRoute),
+                      ),
+                    ],
                     const Divider(height: 1, indent: 16, endIndent: 16),
                     ListTile(
                       leading: const Icon(Icons.logout,

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import 'package:squadsync/core/router/app_router.dart';
 import 'package:squadsync/core/theme/app_theme.dart';
 import 'package:squadsync/features/events/providers/events_providers.dart';
+import 'package:squadsync/features/roster/providers/roster_providers.dart';
 import 'package:squadsync/shared/models/enums.dart';
 import 'package:squadsync/shared/models/event.dart';
 import 'package:squadsync/shared/models/event_roster_entry.dart';
@@ -70,7 +73,7 @@ class EventDetailScreen extends ConsumerWidget {
                       const SizedBox(height: 16),
 
                       // ── Roster section ────────────────────
-                      _buildRosterSection(rosterAsync),
+                      _buildRosterSection(context, ref, event, rosterAsync),
 
                       // ── Notes section ─────────────────────
                       if (event.notes != null &&
@@ -226,7 +229,18 @@ class EventDetailScreen extends ConsumerWidget {
   // ── Roster section ────────────────────────────────────────
 
   Widget _buildRosterSection(
-      AsyncValue<List<EventRosterEntry>> rosterAsync) {
+    BuildContext context,
+    WidgetRef ref,
+    Event event,
+    AsyncValue<List<EventRosterEntry>> rosterAsync,
+  ) {
+    final profileAsync = ref.watch(currentProfileProvider);
+    final canRequestFillIn = profileAsync.whenOrNull(
+          data: (p) =>
+              p.role == UserRole.clubAdmin || p.role == UserRole.coach,
+        ) ??
+        false;
+
     return _SectionCard(
       children: [
         Row(
@@ -240,6 +254,10 @@ class EventDetailScreen extends ConsumerWidget {
               ),
               orElse: () => const SizedBox.shrink(),
             ),
+            if (canRequestFillIn) ...[
+              const SizedBox(width: 8),
+              _FillInButton(event: event),
+            ],
           ],
         ),
         const SizedBox(height: 12),
@@ -496,6 +514,71 @@ class _EventTypeBadge extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+// ── Fill-in button ────────────────────────────────────────────
+
+class _FillInButton extends ConsumerWidget {
+  const _FillInButton({required this.event});
+
+  final Event event;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return GestureDetector(
+      onTap: () => _navigateToFillIn(context, ref),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: AppColors.accentSurface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.accent, width: 1),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.person_add_outlined,
+                color: AppColors.accent, size: 14),
+            const SizedBox(width: 4),
+            Text(
+              'Fill-in +',
+              style: AppTextStyles.caption.copyWith(
+                color: AppColors.accent,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _navigateToFillIn(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    // Resolve the team's division id via the teams table
+    final router = GoRouter.of(context);
+    try {
+      final teamData = await ref
+          .read(rosterRepositoryProvider)
+          .getTeamById(event.teamId);
+      if (!context.mounted) return;
+      router.push(
+        kRequestFillInRoute,
+        extra: FillInArgs(
+          eventId: event.id,
+          eventTitle: event.title,
+          targetDivisionId: teamData?.divisionId ?? '',
+        ),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not load team info')),
+      );
+    }
   }
 }
 

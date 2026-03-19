@@ -735,6 +735,18 @@ class RosterRepository {
     }
   }
 
+  /// Returns a single [Team] by [teamId]. Returns null if not found.
+  Future<Team?> getTeamById(String teamId) async {
+    final data = await supabase
+        .from('teams')
+        .select('id, division_id, name, season, created_at')
+        .eq('id', teamId)
+        .maybeSingle();
+
+    if (data == null) return null;
+    return Team.fromJson(data);
+  }
+
   /// Returns all divisions for a club, ordered by display_order.
   Future<List<Division>> getDivisionsForClub(String clubId) async {
     final response = await supabase

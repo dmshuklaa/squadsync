@@ -188,3 +188,43 @@ enum RsvpStatus {
     }
   }
 }
+
+enum FillInRequestStatus {
+  pending,
+  accepted,
+  declined,
+  expired,
+  cancelled;
+
+  static FillInRequestStatus fromString(String value) {
+    switch (value) {
+      case 'pending':
+        return FillInRequestStatus.pending;
+      case 'accepted':
+        return FillInRequestStatus.accepted;
+      case 'declined':
+        return FillInRequestStatus.declined;
+      case 'expired':
+        return FillInRequestStatus.expired;
+      case 'cancelled':
+        return FillInRequestStatus.cancelled;
+      default:
+        throw ArgumentError('Unknown FillInRequestStatus: $value');
+    }
+  }
+
+  String toJson() {
+    switch (this) {
+      case FillInRequestStatus.pending:
+        return 'pending';
+      case FillInRequestStatus.accepted:
+        return 'accepted';
+      case FillInRequestStatus.declined:
+        return 'declined';
+      case FillInRequestStatus.expired:
+        return 'expired';
+      case FillInRequestStatus.cancelled:
+        return 'cancelled';
+    }
+  }
+}
