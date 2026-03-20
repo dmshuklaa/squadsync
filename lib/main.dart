@@ -1,13 +1,32 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'package:squadsync/core/router/app_router.dart';
+import 'package:squadsync/core/services/push_notification_service.dart';
 import 'package:squadsync/core/theme/app_theme.dart';
+
+// TODO: Run `flutterfire configure` to generate firebase_options.dart,
+//       then uncomment the import below and the options: line in main().
+// import 'firebase_options.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
+
+  // Firebase — initialise gracefully until `flutterfire configure` is run
+  bool firebaseReady = false;
+  try {
+    await Firebase.initializeApp(
+      // TODO: Uncomment after running `flutterfire configure`:
+      // options: DefaultFirebaseOptions.currentPlatform,
+    );
+    firebaseReady = true;
+  } catch (e) {
+    debugPrint('Firebase not configured — push notifications disabled: $e');
+  }
 
   Object? initError;
   try {
@@ -17,6 +36,15 @@ Future<void> main() async {
     );
   } catch (e) {
     initError = e;
+  }
+
+  // Initialise push notifications only when Firebase is ready and user is signed in
+  if (firebaseReady && Supabase.instance.client.auth.currentUser != null) {
+    try {
+      await PushNotificationService(Supabase.instance.client).initialize();
+    } catch (e) {
+      debugPrint('PushNotificationService init failed: $e');
+    }
   }
 
   runApp(

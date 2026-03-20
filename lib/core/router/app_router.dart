@@ -16,6 +16,7 @@ import 'package:squadsync/features/events/screens/home_screen.dart';
 import 'package:squadsync/features/fill_in/screens/fill_in_rules_screen.dart';
 import 'package:squadsync/features/fill_in/screens/request_fill_in_screen.dart';
 import 'package:squadsync/features/fill_in/screens/respond_fill_in_screen.dart';
+import 'package:squadsync/features/chat/screens/chat_screen.dart';
 import 'package:squadsync/features/notifications/screens/alerts_screen.dart';
 import 'package:squadsync/features/onboarding/screens/onboarding_screen.dart';
 import 'package:squadsync/features/profile/screens/guardian_requests_screen.dart';
@@ -87,6 +88,7 @@ const String kCreateEventRoute = '/events/create';
 const String kFillInRulesRoute = '/profile/fill-in-rules';
 const String kRequestFillInRoute = '/fill-in/request';
 const String kRespondFillInRoute = '/fill-in/respond/:id';
+const String kChatRoute = '/chat/:teamId';
 
 // ── Auth-aware ChangeNotifier for GoRouter refreshListenable ─
 
@@ -175,6 +177,13 @@ GoRouter appRouter(AppRouterRef ref) {
       return null;
     },
     routes: [
+      GoRoute(
+        path: kChatRoute,
+        builder: (context, state) => ChatScreen(
+          teamId: state.pathParameters['teamId']!,
+          teamName: state.extra as String? ?? 'Team Chat',
+        ),
+      ),
       GoRoute(
         path: kCreateEventRoute,
         builder: (context, state) => CreateEventScreen(

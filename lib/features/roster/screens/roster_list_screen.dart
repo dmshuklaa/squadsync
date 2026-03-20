@@ -68,12 +68,33 @@ class _RosterListScreenState extends ConsumerState<RosterListScreen> {
         ) ??
         false;
 
+    // Compute selected team name for chat navigation
+    final allTeams = teamsAsync.valueOrNull ?? [];
+    final selectedTeam = allTeams.cast<Team?>().firstWhere(
+          (t) => t?.id == _selectedTeamId,
+          orElse: () => null,
+        );
+    final chatTeamName = selectedTeam != null
+        ? '${selectedTeam.divisionName ?? 'Division'} · ${selectedTeam.name}'
+        : 'Team Chat';
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Squad'),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          if (_selectedTeamId != null)
+            IconButton(
+              icon: const Icon(Icons.chat_bubble_outline),
+              tooltip: 'Team chat',
+              onPressed: () => context.push(
+                '/chat/$_selectedTeamId',
+                extra: chatTeamName,
+              ),
+            ),
+        ],
         // ── Team picker in AppBar bottom ──────────────────────
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(52),
