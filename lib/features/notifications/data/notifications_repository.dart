@@ -29,9 +29,22 @@ class NotificationsRepository {
   }
 
   Future<void> markAsRead(String notificationId) async {
-    await supabase
-        .from('notifications')
-        .update({'read': true}).eq('id', notificationId);
+    // ignore: avoid_print
+    print('[NotifRepo] markAsRead: $notificationId');
+    // ignore: avoid_print
+    print('[NotifRepo] currentUser: ${supabase.auth.currentUser?.id}');
+    try {
+      await supabase
+          .from('notifications')
+          .update({'read': true})
+          .eq('id', notificationId)
+          .eq('profile_id', supabase.auth.currentUser!.id);
+      // ignore: avoid_print
+      print('[NotifRepo] markAsRead success');
+    } catch (e) {
+      // ignore: avoid_print
+      print('[NotifRepo] markAsRead error: $e');
+    }
   }
 
   Future<void> markAllAsRead(String profileId) async {
