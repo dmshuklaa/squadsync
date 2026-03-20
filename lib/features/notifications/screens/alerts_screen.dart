@@ -53,27 +53,9 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen>
     super.dispose();
   }
 
-  Future<void> _markAllRead() async {
-    final userId = supabase.auth.currentUser?.id;
-    if (userId == null) return;
-    try {
-      await ref
-          .read(notificationsRepositoryProvider)
-          .markAllAsRead(userId);
-      ref.invalidate(notificationsProvider);
-      ref.invalidate(unreadCountProvider);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final unreadAsync = ref.watch(unreadCountProvider);
-    final unread = unreadAsync.whenOrNull(data: (n) => n) ?? 0;
+    final unreadCount = ref.watch(unreadCountProvider).valueOrNull ?? 0;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -83,13 +65,20 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen>
         elevation: 0,
         title: const Text('Alerts'),
         actions: [
-          if (unread > 0)
+          if (unreadCount > 0)
             TextButton(
-              onPressed: _markAllRead,
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.accent,
+              onPressed: () async {
+                final userId = supabase.auth.currentUser?.id;
+                if (userId == null) return;
+                final repo = ref.read(notificationsRepositoryProvider);
+                await repo.markAllAsRead(userId);
+                ref.invalidate(notificationsProvider);
+                ref.invalidate(unreadCountProvider);
+              },
+              child: const Text(
+                'Mark all read',
+                style: TextStyle(color: AppColors.accent),
               ),
-              child: const Text('Mark all read'),
             ),
         ],
         bottom: TabBar(
@@ -106,10 +95,7 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen>
       body: TabBarView(
         controller: _tabController,
         children: [
-          _AllNotificationsTab(onMarkRead: () {
-            ref.invalidate(notificationsProvider);
-            ref.invalidate(unreadCountProvider);
-          }),
+          const _AllNotificationsTab(),
           const _FillInRequestsTab(),
         ],
       ),
@@ -120,9 +106,7 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen>
 // ── Tab 1: All notifications ───────────────────────────────────────────────
 
 class _AllNotificationsTab extends ConsumerWidget {
-  const _AllNotificationsTab({required this.onMarkRead});
-
-  final VoidCallback onMarkRead;
+  const _AllNotificationsTab();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -148,10 +132,8 @@ class _AllNotificationsTab extends ConsumerWidget {
           itemCount: items.length,
           separatorBuilder: (context, _) =>
               const Divider(height: 1, indent: 72, endIndent: 16),
-          itemBuilder: (context, i) => _NotificationTile(
-            notification: items[i],
-            onMarkedRead: onMarkRead,
-          ),
+          itemBuilder: (context, i) =>
+              _NotificationTile(notification: items[i]),
         );
       },
     );
@@ -159,13 +141,9 @@ class _AllNotificationsTab extends ConsumerWidget {
 }
 
 class _NotificationTile extends ConsumerWidget {
-  const _NotificationTile({
-    required this.notification,
-    required this.onMarkedRead,
-  });
+  const _NotificationTile({required this.notification});
 
   final NotificationItem notification;
-  final VoidCallback onMarkedRead;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -217,18 +195,19 @@ class _NotificationTile extends ConsumerWidget {
       isThreeLine: true,
       onTap: () async {
         if (!notification.read) {
-          await ref
-              .read(notificationsRepositoryProvider)
-              .markAsRead(notification.id);
-          onMarkedRead();
+          final repo = ref.read(notificationsRepositoryProvider);
+          await repo.markAsRead(notification.id);
+          ref.invalidate(notificationsProvider);
+          ref.invalidate(unreadCountProvider);
         }
         if (!context.mounted) return;
-        _navigateToRelated(context, notification);
+        _navigateToRelated(context, ref, notification);
       },
     );
   }
 
-  void _navigateToRelated(BuildContext context, NotificationItem n) {
+  void _navigateToRelated(
+      BuildContext context, WidgetRef ref, NotificationItem n) {
     switch (n.type) {
       case NotificationType.fillInRequest:
         if (n.relatedId != null) {
