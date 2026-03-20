@@ -16,7 +16,7 @@ import 'package:squadsync/features/events/screens/home_screen.dart';
 import 'package:squadsync/features/fill_in/screens/fill_in_rules_screen.dart';
 import 'package:squadsync/features/fill_in/screens/request_fill_in_screen.dart';
 import 'package:squadsync/features/fill_in/screens/respond_fill_in_screen.dart';
-import 'package:squadsync/features/notifications/screens/notifications_screen.dart';
+import 'package:squadsync/features/notifications/screens/alerts_screen.dart';
 import 'package:squadsync/features/onboarding/screens/onboarding_screen.dart';
 import 'package:squadsync/features/profile/screens/guardian_requests_screen.dart';
 import 'package:squadsync/features/profile/screens/profile_screen.dart';
@@ -282,7 +282,7 @@ GoRouter appRouter(AppRouterRef ref) {
             routes: [
               GoRoute(
                 path: kNotificationsRoute,
-                builder: (context, state) => const NotificationsScreen(),
+                builder: (context, state) => const AlertsScreen(),
               ),
             ],
           ),

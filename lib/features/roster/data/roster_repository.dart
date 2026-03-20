@@ -1,4 +1,5 @@
 import 'package:squadsync/core/supabase/supabase_client.dart';
+import 'package:squadsync/features/notifications/data/notifications_repository.dart';
 import 'package:squadsync/features/roster/data/csv_mapper.dart';
 import 'package:squadsync/shared/models/division.dart';
 import 'package:squadsync/shared/models/enums.dart';
@@ -679,6 +680,25 @@ class RosterRepository {
       'permission_level': permissionLevel.toJson(),
       'confirmed': false,
     });
+
+    // Notify the guardian of the pending request
+    try {
+      final playerData = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', playerProfileId)
+          .maybeSingle();
+      final playerName =
+          (playerData?['full_name'] as String?) ?? 'a player';
+      await const NotificationsRepository().createNotification(
+        profileId: guardianProfileId,
+        type: NotificationType.guardianRequest,
+        title: 'Guardian link request',
+        body:
+            'You have been requested as a guardian for $playerName. Tap to review.',
+        data: {},
+      );
+    } catch (_) {}
   }
 
   /// Confirms a pending guardian link (guardian accepts).
@@ -688,6 +708,33 @@ class RosterRepository {
         .update({'confirmed': true})
         .eq('id', guardianLinkId)
         .eq('guardian_profile_id', supabase.auth.currentUser!.id);
+
+    // Notify the player that their guardian link was confirmed
+    try {
+      final linkData = await supabase
+          .from('guardian_links')
+          .select('player_profile_id')
+          .eq('id', guardianLinkId)
+          .maybeSingle();
+      final playerProfileId = linkData?['player_profile_id'] as String?;
+      if (playerProfileId != null) {
+        final guardianId = supabase.auth.currentUser!.id;
+        final guardianData = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', guardianId)
+            .maybeSingle();
+        final guardianName =
+            (guardianData?['full_name'] as String?) ?? 'Your guardian';
+        await const NotificationsRepository().createNotification(
+          profileId: playerProfileId,
+          type: NotificationType.guardianAccepted,
+          title: 'Guardian link confirmed',
+          body: '$guardianName has accepted your guardian request.',
+          data: {},
+        );
+      }
+    } catch (_) {}
   }
 
   /// Declines and removes a pending guardian link (guardian declines).

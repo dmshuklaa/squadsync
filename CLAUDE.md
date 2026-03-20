@@ -294,9 +294,42 @@ Sprint 5 — Polish & App Store Prep  [ ]
 - lib/features/roster/screens/roster_list_screen.dart — RawChip team picker (showCheckmark:false, avatar:null), FilterChip status bar (showCheckmark:false, border on unselected), teal extended FAB
 - lib/features/roster/screens/player_profile_screen.dart — navy curved banner, teal accent bars on section cards, pending view navy banner
 
+## Sprint 3 — what was built
+### 3.1 Events
+- supabase/migrations/008_events.sql — events, event_roster, rsvps tables + RLS
+- lib/shared/models/event.dart, event_roster_entry.dart — models with fromJson/toJson/copyWith
+- lib/features/events/data/events_repository.dart — createEvent (auto-adds active members to roster), getUpcomingEvents, getEventById, getRsvpCounts, getEventRoster, upsertRsvp
+- lib/features/events/providers/events_providers.dart — upcomingEventsProvider, eventDetailProvider, rsvpCountsProvider, eventRosterProvider, myRsvpProvider, RsvpNotifier
+- lib/features/events/screens/event_list_screen.dart — filterable event list
+- lib/features/events/screens/event_detail_screen.dart — navy hero header, RSVP buttons with counts, roster section with fill-in button, notes section
+- lib/features/events/screens/create_event_screen.dart — form: title, type chips, date/time pickers, location, notes, team selector; calls repo directly (no notifier — avoids Future-already-completed bug)
+- lib/features/events/screens/home_screen.dart — upcoming events card list, + button for admin/coach, avatar in header
+- GoRouter: kCreateEventRoute ('/events/create'), kEventDetailRoute ('/events/:id') as top-level routes (no bottom nav bar)
+
+### 3.2 Fill-in system
+- supabase/migrations/010_fill_in.sql — fill_in_rules, fill_in_requests, fill_in_log tables; fill_in_request_status enum; RLS policies; indexes
+- lib/shared/models/fill_in_rule.dart, fill_in_request.dart — models
+- lib/shared/models/enums.dart — FillInRequestStatus enum appended
+- lib/features/fill_in/data/fill_in_repository.dart — getRules, createRule, toggleRule, deleteRule, getEligiblePlayers (6-step query with explicit teams lookup), getFillInCountThisSeason, createRequest (+ notification), respondToRequest (+ notification on accept), getPendingRequestsForPlayer, getRequestById
+- lib/features/fill_in/providers/fill_in_providers.dart — fillInRepositoryProvider, fillInRulesProvider, eligiblePlayersProvider, pendingFillInRequestsProvider, fillInRequestByIdProvider
+- lib/features/fill_in/screens/fill_in_rules_screen.dart — admin-only; Dismissible rule cards with toggle; FAB → bottom sheet with division dropdowns
+- lib/features/fill_in/screens/request_fill_in_screen.dart — position field, eligible players list with season count, confirm bottom sheet
+- lib/features/fill_in/screens/respond_fill_in_screen.dart — request details, Accept/Decline, already-responded state
+- GoRouter: kFillInRulesRoute, kRequestFillInRoute, kRespondFillInRoute; FillInArgs class
+
+### 3.3 Alerts / Notifications (Sprint 4.1 early)
+- supabase/migrations/011_notifications.sql — notifications table, notification_type enum, RLS policies, indexes
+- lib/shared/models/notification_item.dart — NotificationItem model
+- lib/shared/models/enums.dart — NotificationType enum appended
+- lib/features/notifications/data/notifications_repository.dart — getNotifications, getUnreadCount, markAsRead, markAllAsRead, createNotification
+- lib/features/notifications/providers/notifications_providers.dart — notificationsRepositoryProvider, notificationsProvider, unreadCountProvider, myPendingFillInRequestsProvider
+- lib/features/notifications/screens/alerts_screen.dart — 2-tab screen (All / Fill-in requests); real-time Supabase stream subscription; NotificationTile with icon/color by type; FillInRequestCard with inline Accept/Decline; Mark all read action
+- lib/shared/widgets/bottom_nav_shell.dart — upgraded to ConsumerWidget; Badge on Alerts tab showing unread count
+- Auto-notification hooks: fill_in_repository createRequest → notifies player; respondToRequest accepted → notifies coach; roster_repository createGuardianLinkRequest → notifies guardian; confirmGuardianLink → notifies player
+
 ## known pre-production cleanup
 - Remove diagnostic print statements in onboarding_provider.dart before App Store submission
 - Remove debug print in error_mapper.dart before App Store submission
 - Remove debug print statements in roster_list_screen.dart before App Store submission
-- Profile screen role reads from JWT userMetadata (signup role) — replace with live DB fetch in Sprint 5
+- Remove 9 debug print statements in fill_in_repository.dart and event_detail_screen.dart before App Store submission
 - send-invite Edge Function stores email as full_name when name is not provided — fix function to leave full_name null; RosterEntry.fromPendingPlayer has a defensive guard in the meantime

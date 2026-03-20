@@ -1,4 +1,5 @@
 import 'package:squadsync/core/supabase/supabase_client.dart';
+import 'package:squadsync/features/notifications/data/notifications_repository.dart';
 import 'package:squadsync/shared/models/enums.dart';
 import 'package:squadsync/shared/models/fill_in_request.dart';
 import 'package:squadsync/shared/models/fill_in_rule.dart';
@@ -174,7 +175,26 @@ class FillInRepository {
         .select()
         .single();
 
-    return FillInRequest.fromJson(data);
+    final request = FillInRequest.fromJson(data);
+
+    // Notify player of the new fill-in request
+    try {
+      final eventData = await supabase
+          .from('events')
+          .select('title')
+          .eq('id', eventId)
+          .maybeSingle();
+      final eventTitle = (eventData?['title'] as String?) ?? 'an event';
+      await const NotificationsRepository().createNotification(
+        profileId: playerId,
+        type: NotificationType.fillInRequest,
+        title: 'Fill-in request',
+        body: 'You have been requested to fill in for $eventTitle',
+        data: {'id': request.id},
+      );
+    } catch (_) {}
+
+    return request;
   }
 
   Future<void> respondToRequest({
@@ -239,6 +259,27 @@ class FillInRepository {
           'event_date': (eventData['starts_at'] as String).substring(0, 10),
           'game_name': eventData['title'] as String,
         });
+
+        // Notify the requesting coach that the player accepted
+        try {
+          final requestingCoachId =
+              requestData['requesting_coach_id'] as String;
+          final playerData = await supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('id', playerId)
+              .maybeSingle();
+          final playerName =
+              (playerData?['full_name'] as String?) ?? 'The player';
+          final gameTitle = eventData['title'] as String;
+          await const NotificationsRepository().createNotification(
+            profileId: requestingCoachId,
+            type: NotificationType.fillInAccepted,
+            title: 'Fill-in accepted',
+            body: '$playerName has accepted your fill-in request for $gameTitle',
+            data: {'id': requestId},
+          );
+        } catch (_) {}
       }
     }
   }

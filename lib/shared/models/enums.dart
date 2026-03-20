@@ -189,6 +189,56 @@ enum RsvpStatus {
   }
 }
 
+enum NotificationType {
+  fillInRequest,
+  fillInAccepted,
+  fillInDeclined,
+  guardianRequest,
+  guardianAccepted,
+  eventReminder,
+  general;
+
+  static NotificationType fromString(String value) {
+    switch (value) {
+      case 'fill_in_request':
+        return NotificationType.fillInRequest;
+      case 'fill_in_accepted':
+        return NotificationType.fillInAccepted;
+      case 'fill_in_declined':
+        return NotificationType.fillInDeclined;
+      case 'guardian_request':
+        return NotificationType.guardianRequest;
+      case 'guardian_accepted':
+        return NotificationType.guardianAccepted;
+      case 'event_reminder':
+        return NotificationType.eventReminder;
+      case 'general':
+        return NotificationType.general;
+      default:
+        return NotificationType.general;
+    }
+  }
+
+  String toJson() {
+    switch (this) {
+      case NotificationType.fillInRequest:
+        return 'fill_in_request';
+      case NotificationType.fillInAccepted:
+        return 'fill_in_accepted';
+      case NotificationType.fillInDeclined:
+        return 'fill_in_declined';
+      case NotificationType.guardianRequest:
+        return 'guardian_request';
+      case NotificationType.guardianAccepted:
+        return 'guardian_accepted';
+      case NotificationType.eventReminder:
+        return 'event_reminder';
+      case NotificationType.general:
+        return 'general';
+    }
+  }
+}
+
 enum FillInRequestStatus {
   pending,
   accepted,
