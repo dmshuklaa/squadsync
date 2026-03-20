@@ -3,8 +3,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// Maps Supabase [AuthException] messages to user-friendly strings.
 abstract final class AuthErrorMapper {
   static String map(Object error) {
-    // ignore: avoid_print
-    print('[AuthErrorMapper] $error');
     if (error is AuthException) {
       final msg = error.message.toLowerCase();
       if (msg.contains('invalid login credentials') ||

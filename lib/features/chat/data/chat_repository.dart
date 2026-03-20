@@ -72,45 +72,4 @@ class ChatRepository {
       'content': '[deleted]',
     }).eq('id', messageId);
   }
-
-  /// Real-time stream of the latest 50 messages for [teamId].
-  /// Uses an in-memory profile cache to avoid repeated profile lookups.
-  Stream<List<ChatMessage>> watchMessages(String teamId) async* {
-    final profileCache = <String, Map<String, dynamic>>{};
-
-    final stream = supabase
-        .from('chat_messages')
-        .stream(primaryKey: ['id'])
-        .eq('team_id', teamId)
-        .order('created_at', ascending: false)
-        .limit(50);
-
-    await for (final rows in stream) {
-      final missingIds = rows
-          .map((r) => r['sender_id'] as String)
-          .toSet()
-          .where((id) => !profileCache.containsKey(id))
-          .toList();
-
-      if (missingIds.isNotEmpty) {
-        final profiles = await supabase
-            .from('profiles')
-            .select('id, full_name, avatar_url')
-            .inFilter('id', missingIds);
-        for (final p in profiles as List) {
-          final pm = p as Map<String, dynamic>;
-          profileCache[pm['id'] as String] = pm;
-        }
-      }
-
-      yield rows.map((row) {
-        final profile = profileCache[row['sender_id'] as String];
-        return ChatMessage.fromJson({
-          ...row,
-          'sender_full_name': profile?['full_name'],
-          'sender_avatar_url': profile?['avatar_url'],
-        });
-      }).toList();
-    }
-  }
 }

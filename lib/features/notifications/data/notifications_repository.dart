@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:squadsync/core/supabase/supabase_client.dart';
 import 'package:squadsync/shared/models/enums.dart';
 import 'package:squadsync/shared/models/notification_item.dart';
@@ -29,21 +30,14 @@ class NotificationsRepository {
   }
 
   Future<void> markAsRead(String notificationId) async {
-    // ignore: avoid_print
-    print('[NotifRepo] markAsRead: $notificationId');
-    // ignore: avoid_print
-    print('[NotifRepo] currentUser: ${supabase.auth.currentUser?.id}');
     try {
       await supabase
           .from('notifications')
           .update({'read': true})
           .eq('id', notificationId)
           .eq('profile_id', supabase.auth.currentUser!.id);
-      // ignore: avoid_print
-      print('[NotifRepo] markAsRead success');
     } catch (e) {
-      // ignore: avoid_print
-      print('[NotifRepo] markAsRead error: $e');
+      debugPrint('[NotifRepo] markAsRead error: $e');
     }
   }
 

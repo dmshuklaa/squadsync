@@ -51,11 +51,7 @@ class _RosterListScreenState extends ConsumerState<RosterListScreen> {
     // Auto-select first team when teams first arrive
     ref.listen<AsyncValue<List<Team>>>(userTeamsProvider, (_, next) {
       next.whenData((teams) {
-        // ignore: avoid_print
-        print('[RosterListScreen] userTeams loaded: ${teams.map((t) => '${t.name} (${t.id})').toList()}');
         if (_selectedTeamId == null && teams.isNotEmpty) {
-          // ignore: avoid_print
-          print('[RosterListScreen] auto-selecting team: ${teams.first.id}');
           setState(() => _selectedTeamId = teams.first.id);
         }
       });
@@ -159,8 +155,6 @@ class _RosterListScreenState extends ConsumerState<RosterListScreen> {
           final isSelected = team.id == _selectedTeamId;
           final divName = team.divisionName ?? 'Division';
           final teamName = team.name;
-          // ignore: avoid_print
-          print('[RosterScreen] chip team: ${team.name} div: ${team.divisionName}');
 
           return RawChip(
             label: Text(
@@ -257,24 +251,14 @@ class _RosterListScreenState extends ConsumerState<RosterListScreen> {
       );
     }
 
-    // ignore: avoid_print
-    print('[RosterListScreen] watching roster for teamId: $teamId');
     final rosterAsync = ref.watch(teamRosterProvider(teamId));
 
     return rosterAsync.when(
       loading: () => const RosterShimmer(),
-      error: (e, stackTrace) {
-        // ignore: avoid_print
-        print('[RosterListScreen] roster error: $e');
-        // ignore: avoid_print
-        print('[RosterListScreen] roster error type: ${e.runtimeType}');
-        // ignore: avoid_print
-        print('[RosterListScreen] roster stackTrace: $stackTrace');
-        return ErrorStateWidget(
-          message: 'Failed to load roster.\nPlease try again.',
-          onRetry: () => ref.invalidate(teamRosterProvider(teamId)),
-        );
-      },
+      error: (e, _) => ErrorStateWidget(
+        message: 'Failed to load roster.\nPlease try again.',
+        onRetry: () => ref.invalidate(teamRosterProvider(teamId)),
+      ),
       data: (entries) {
         final filtered = _applyFilter(entries);
 

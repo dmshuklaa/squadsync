@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:squadsync/core/supabase/supabase_client.dart';
 import 'package:squadsync/features/notifications/data/notifications_repository.dart';
 import 'package:squadsync/features/roster/data/csv_mapper.dart';
@@ -14,34 +15,19 @@ class RosterRepository {
 
   /// Fetches all memberships for [teamId], joining profile fields.
   Future<List<TeamMembership>> getTeamRoster(String teamId) async {
-    // ignore: avoid_print
-    print('[RosterRepository] getTeamRoster called with teamId: $teamId');
-    try {
-      final response = await supabase
-          .from('team_memberships')
-          .select(
-            'id, team_id, profile_id, position, jersey_number, status, '
-            'created_at, updated_at, '
-            'profiles(full_name, avatar_url, availability_this_week)',
-          )
-          .eq('team_id', teamId)
-          .order('profiles(full_name)');
+    final response = await supabase
+        .from('team_memberships')
+        .select(
+          'id, team_id, profile_id, position, jersey_number, status, '
+          'created_at, updated_at, '
+          'profiles(full_name, avatar_url, availability_this_week)',
+        )
+        .eq('team_id', teamId)
+        .order('profiles(full_name)');
 
-      // ignore: avoid_print
-      print('[RosterRepository] getTeamRoster raw response: $response');
-
-      return (response as List)
-          .map((row) => TeamMembership.fromJson(row as Map<String, dynamic>))
-          .toList();
-    } catch (e, stackTrace) {
-      // ignore: avoid_print
-      print('[RosterRepository] getTeamRoster error: $e');
-      // ignore: avoid_print
-      print('[RosterRepository] error type: ${e.runtimeType}');
-      // ignore: avoid_print
-      print('[RosterRepository] stackTrace: $stackTrace');
-      rethrow;
-    }
+    return (response as List)
+        .map((row) => TeamMembership.fromJson(row as Map<String, dynamic>))
+        .toList();
   }
 
   /// Returns teams accessible to [profileId] based on [role]:
@@ -54,9 +40,6 @@ class RosterRepository {
     required String clubId,
     required UserRole role,
   }) async {
-    // ignore: avoid_print
-    print('[RosterRepo] getTeamsForUser: profileId=$profileId role=$role');
-
     List<Team> teams;
 
     if (role == UserRole.clubAdmin || role == UserRole.coach) {
@@ -68,8 +51,6 @@ class RosterRepository {
           .eq('id', profileId)
           .single();
       final resolvedClubId = profileResponse['club_id'] as String?;
-      // ignore: avoid_print
-      print('[RosterRepo] resolved clubId=$resolvedClubId');
 
       if (resolvedClubId == null) return [];
 
@@ -84,9 +65,6 @@ class RosterRepository {
           )
           .eq('divisions.club_id', resolvedClubId)
           .order('display_order', referencedTable: 'divisions', ascending: true);
-
-      // ignore: avoid_print
-      print('[RosterRepo] teams raw response: $response');
 
       teams = (response as List)
           .map((row) => Team.fromJson(row as Map<String, dynamic>))
@@ -105,9 +83,6 @@ class RosterRepository {
           .eq('profile_id', profileId)
           .eq('status', 'active');
 
-      // ignore: avoid_print
-      print('[RosterRepo] teams raw response: $response');
-
       teams = (response as List)
           .map((row) {
             final teamData = row['teams'] as Map<String, dynamic>?;
@@ -122,8 +97,6 @@ class RosterRepository {
     // query returned empty due to RLS or division filter), try fetching
     // via team_memberships directly for any active membership.
     if (teams.isEmpty) {
-      // ignore: avoid_print
-      print('[RosterRepo] Primary query empty, trying membership fallback');
       final fallback = await supabase
           .from('team_memberships')
           .select(
@@ -134,9 +107,6 @@ class RosterRepository {
           )
           .eq('profile_id', profileId)
           .eq('status', 'active');
-
-      // ignore: avoid_print
-      print('[RosterRepo] Fallback result: $fallback');
 
       teams = (fallback as List)
           .map((row) {
@@ -304,13 +274,11 @@ class RosterRepository {
         }
         edgeFunctionSucceeded = true;
       } else {
-        // ignore: avoid_print
-        print('send-invite returned ${response.status} — falling back');
+        debugPrint('send-invite returned ${response.status} — falling back');
       }
     } catch (e) {
       // Edge Function not deployed yet — fall back to pending_players
-      // ignore: avoid_print
-      print('send-invite not available: $e');
+      debugPrint('send-invite not available: $e');
     }
 
     if (edgeFunctionSucceeded) return;
@@ -632,8 +600,7 @@ class RosterRepository {
       );
     } catch (e) {
       // Edge Function not yet deployed — silently succeed (nothing to resend)
-      // ignore: avoid_print
-      print('send-invite not available for resend: $e');
+      debugPrint('send-invite not available for resend: $e');
     }
   }
 

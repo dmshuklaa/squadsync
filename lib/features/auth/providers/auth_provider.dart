@@ -62,6 +62,10 @@ class AuthNotifier extends _$AuthNotifier {
   Future<void> signOut() async {
     state = const AsyncLoading();
     try {
+      // Tear down all real-time subscriptions before invalidating the auth
+      // token — prevents RealtimeSubscribeStatus.timedOut errors from channels
+      // that are still active when the session is terminated.
+      await supabase.removeAllChannels();
       await supabase.auth.signOut();
       state = const AsyncData(null);
     } catch (e, st) {

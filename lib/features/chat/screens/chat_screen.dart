@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:squadsync/core/supabase/supabase_client.dart';
 import 'package:squadsync/core/theme/app_theme.dart';
-import 'package:squadsync/features/chat/data/chat_repository.dart';
 import 'package:squadsync/features/chat/providers/chat_providers.dart';
+import 'package:squadsync/features/roster/providers/roster_providers.dart';
 import 'package:squadsync/shared/models/chat_message.dart';
 import 'package:squadsync/shared/widgets/avatar_widget.dart';
 import 'package:squadsync/shared/widgets/error_state_widget.dart';
@@ -28,11 +29,71 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
 
+  List<ChatMessage> _messages = [];
+  bool _loading = true;
+  bool _hasError = false;
+  RealtimeChannel? _channel;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMessages(initialLoad: true);
+    _subscribeToChanges();
+  }
+
   @override
   void dispose() {
+    _channel?.unsubscribe();
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadMessages({bool initialLoad = false}) async {
+    try {
+      final messages = await ref
+          .read(chatRepositoryProvider)
+          .getMessages(widget.teamId);
+      if (mounted) {
+        setState(() {
+          _messages = messages;
+          if (initialLoad) _loading = false;
+          _hasError = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          if (initialLoad) _loading = false;
+          _hasError = true;
+        });
+      }
+    }
+  }
+
+  void _subscribeToChanges() {
+    try {
+      _channel = supabase
+          .channel('chat_${widget.teamId}')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'chat_messages',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'team_id',
+              value: widget.teamId,
+            ),
+            callback: (_) => _loadMessages(),
+          )
+          .subscribe((status, error) {
+            if (error != null) {
+              debugPrint('Chat realtime error: $error (status: $status)');
+            }
+          });
+    } catch (e) {
+      debugPrint('Chat realtime subscribe failed: $e');
+    }
   }
 
   Future<void> _sendMessage() async {
@@ -43,13 +104,41 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return;
 
+    final profile = ref.read(currentProfileProvider).valueOrNull;
+
+    // Optimistic insert
+    final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
+    final tempMessage = ChatMessage(
+      id: tempId,
+      teamId: widget.teamId,
+      senderId: userId,
+      content: content,
+      edited: false,
+      deleted: false,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+      senderFullName: profile?.fullName,
+      senderAvatarUrl: profile?.avatarUrl,
+    );
+
+    setState(() {
+      _messages = [tempMessage, ..._messages];
+    });
+
+    // Fallback: replace temp after 500 ms if subscription is slow
+    Future.delayed(const Duration(milliseconds: 500), _loadMessages);
+
     try {
-      await const ChatRepository().sendMessage(
-        teamId: widget.teamId,
-        senderId: userId,
-        content: content,
-      );
+      await ref.read(chatRepositoryProvider).sendMessage(
+            teamId: widget.teamId,
+            senderId: userId,
+            content: content,
+          );
+      // Real-time subscription will call _loadMessages() and replace temp
     } catch (e) {
+      setState(() {
+        _messages = _messages.where((m) => m.id != tempId).toList();
+      });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to send: $e')),
@@ -57,163 +146,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final messagesAsync = ref.watch(chatMessagesProvider(widget.teamId));
-
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: Text(widget.teamName),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.info_outline),
-            onPressed: () {
-              // TODO: show team info
-            },
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // ── Message list ──────────────────────────────
-          Expanded(
-            child: messagesAsync.when(
-              loading: () => const Center(
-                child: CircularProgressIndicator(color: AppColors.accent),
-              ),
-              error: (e, _) => ErrorStateWidget(
-                message: 'Error loading messages: $e',
-                onRetry: () =>
-                    ref.invalidate(chatMessagesProvider(widget.teamId)),
-              ),
-              data: (messages) {
-                if (messages.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.chat_bubble_outline,
-                          size: 48,
-                          color: AppColors.textHint,
-                        ),
-                        const SizedBox(height: 12),
-                        const Text('No messages yet',
-                            style: AppTextStyles.body),
-                        Text(
-                          'Start the conversation!',
-                          style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.textHint),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-                return ListView.builder(
-                  controller: _scrollController,
-                  reverse: true,
-                  padding: const EdgeInsets.symmetric(
-                      vertical: 12, horizontal: 12),
-                  itemCount: messages.length,
-                  itemBuilder: (context, i) => _ChatBubble(
-                    message: messages[i],
-                    currentUserId:
-                        supabase.auth.currentUser?.id ?? '',
-                    onEdit: (msg) => _showEditDialog(msg),
-                    onDelete: (msg) => _confirmDelete(msg),
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // ── Message input ─────────────────────────────
-          Container(
-            decoration: const BoxDecoration(
-              color: AppColors.surface,
-              border: Border(
-                  top: BorderSide(color: AppColors.border)),
-            ),
-            padding: const EdgeInsets.symmetric(
-                horizontal: 8, vertical: 8),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _messageController,
-                    decoration: InputDecoration(
-                      hintText: 'Message ${widget.teamName}...',
-                      hintStyle: const TextStyle(
-                          color: AppColors.textHint),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: const BorderSide(
-                            color: AppColors.border),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: const BorderSide(
-                            color: AppColors.border),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: const BorderSide(
-                            color: AppColors.accent),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
-                      filled: true,
-                      fillColor: AppColors.background,
-                    ),
-                    maxLines: null,
-                    textCapitalization:
-                        TextCapitalization.sentences,
-                    onSubmitted: (_) => _sendMessage(),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: _messageController,
-                  builder: (context, value, _) {
-                    final hasText = value.text.trim().isNotEmpty;
-                    return AnimatedContainer(
-                      duration:
-                          const Duration(milliseconds: 200),
-                      child: hasText
-                          ? IconButton(
-                              onPressed: _sendMessage,
-                              icon: const Icon(
-                                  Icons.send_rounded),
-                              style: IconButton.styleFrom(
-                                backgroundColor:
-                                    AppColors.accent,
-                                foregroundColor:
-                                    AppColors.primary,
-                              ),
-                            )
-                          : const Icon(
-                              Icons.send_rounded,
-                              color: AppColors.textHint,
-                            ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _showEditDialog(ChatMessage message) async {
-    final controller =
-        TextEditingController(text: message.content);
+  Future<void> _handleEdit(ChatMessage message) async {
+    final controller = TextEditingController(text: message.content);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -238,10 +172,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
     if (confirmed == true && controller.text.trim().isNotEmpty) {
       try {
-        await const ChatRepository().editMessage(
-          messageId: message.id,
-          content: controller.text.trim(),
-        );
+        await ref.read(chatRepositoryProvider).editMessage(
+              messageId: message.id,
+              content: controller.text.trim(),
+            );
+        await _loadMessages();
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -252,7 +187,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     controller.dispose();
   }
 
-  Future<void> _confirmDelete(ChatMessage message) async {
+  Future<void> _handleDelete(ChatMessage message) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -265,8 +200,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            style:
-                TextButton.styleFrom(foregroundColor: AppColors.error),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Delete'),
           ),
@@ -275,7 +209,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
     if (confirmed == true) {
       try {
-        await const ChatRepository().deleteMessage(message.id);
+        await ref.read(chatRepositoryProvider).deleteMessage(message.id);
+        await _loadMessages();
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -284,9 +219,152 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       }
     }
   }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentUserId = supabase.auth.currentUser?.id ?? '';
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: Text(widget.teamName),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline),
+            onPressed: () {
+              // TODO: show team info
+            },
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // ── Message list ──────────────────────────────────────
+          Expanded(child: _buildMessageList(currentUserId)),
+
+          // ── Message input ─────────────────────────────────────
+          Container(
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              border: Border(top: BorderSide(color: AppColors.border)),
+            ),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _messageController,
+                    decoration: InputDecoration(
+                      hintText: 'Message ${widget.teamName}...',
+                      hintStyle:
+                          const TextStyle(color: AppColors.textHint),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide:
+                            const BorderSide(color: AppColors.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide:
+                            const BorderSide(color: AppColors.border),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide:
+                            const BorderSide(color: AppColors.accent),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 10),
+                      filled: true,
+                      fillColor: AppColors.background,
+                    ),
+                    maxLines: null,
+                    textCapitalization: TextCapitalization.sentences,
+                    onSubmitted: (_) => _sendMessage(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: _messageController,
+                  builder: (context, value, _) {
+                    final hasText = value.text.trim().isNotEmpty;
+                    return hasText
+                        ? IconButton(
+                            onPressed: _sendMessage,
+                            icon: const Icon(Icons.send_rounded),
+                            style: IconButton.styleFrom(
+                              backgroundColor: AppColors.accent,
+                              foregroundColor: AppColors.primary,
+                            ),
+                          )
+                        : const SizedBox.shrink();
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessageList(String currentUserId) {
+    if (_loading) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.accent),
+      );
+    }
+
+    if (_hasError) {
+      return ErrorStateWidget(
+        message: 'Error loading messages.\nPlease try again.',
+        onRetry: _loadMessages,
+      );
+    }
+
+    if (_messages.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.chat_bubble_outline,
+              size: 48,
+              color: AppColors.textHint,
+            ),
+            const SizedBox(height: 12),
+            const Text('No messages yet', style: AppTextStyles.body),
+            Text(
+              'Start the conversation!',
+              style:
+                  AppTextStyles.bodySmall.copyWith(color: AppColors.textHint),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      controller: _scrollController,
+      reverse: true,
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      itemCount: _messages.length,
+      itemBuilder: (context, i) => _ChatBubble(
+        message: _messages[i],
+        currentUserId: currentUserId,
+        onEdit: _handleEdit,
+        onDelete: _handleDelete,
+      ),
+    );
+  }
 }
 
-// ── Chat bubble ────────────────────────────────────────────────────────────
+// ── Chat bubble ─────────────────────────────────────────────────────────────
 
 class _ChatBubble extends StatelessWidget {
   const _ChatBubble({
@@ -306,9 +384,13 @@ class _ChatBubble extends StatelessWidget {
     final isMe = message.senderId == currentUserId;
 
     return GestureDetector(
-      onLongPress: isMe && !message.isDeleted
-          ? () => _showMessageOptions(context)
-          : null,
+      onLongPress: () {
+        if (!message.id.startsWith('temp_') &&
+            message.senderId == currentUserId &&
+            !message.isDeleted) {
+          _showMessageOptions(context);
+        }
+      },
       child: Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Row(
@@ -326,14 +408,12 @@ class _ChatBubble extends StatelessWidget {
             ],
             Flexible(
               child: Column(
-                crossAxisAlignment: isMe
-                    ? CrossAxisAlignment.end
-                    : CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                 children: [
                   if (!isMe)
                     Padding(
-                      padding: const EdgeInsets.only(
-                          left: 4, bottom: 2),
+                      padding: const EdgeInsets.only(left: 4, bottom: 2),
                       child: Text(
                         message.senderFullName ?? '',
                         style: const TextStyle(
@@ -345,16 +425,14 @@ class _ChatBubble extends StatelessWidget {
                     ),
                   ConstrainedBox(
                     constraints: BoxConstraints(
-                      maxWidth:
-                          MediaQuery.of(context).size.width * 0.75,
+                      maxWidth: MediaQuery.of(context).size.width * 0.75,
                     ),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(
-                        color: isMe
-                            ? AppColors.primary
-                            : AppColors.surface,
+                        color:
+                            isMe ? AppColors.primary : AppColors.surface,
                         borderRadius: BorderRadius.only(
                           topLeft: const Radius.circular(18),
                           topRight: const Radius.circular(18),
@@ -372,9 +450,7 @@ class _ChatBubble extends StatelessWidget {
                       child: Text(
                         message.displayContent,
                         style: TextStyle(
-                          color: isMe
-                              ? Colors.white
-                              : AppColors.textPrimary,
+                          color: isMe ? Colors.white : AppColors.textPrimary,
                           fontSize: 15,
                           fontStyle: message.isDeleted
                               ? FontStyle.italic
@@ -418,6 +494,7 @@ class _ChatBubble extends StatelessWidget {
   }
 
   void _showMessageOptions(BuildContext context) {
+    if (message.id.startsWith('temp_')) return;
     showModalBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
@@ -425,8 +502,7 @@ class _ChatBubble extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading:
-                  const Icon(Icons.edit_outlined, color: AppColors.accent),
+              leading: const Icon(Icons.edit_outlined, color: AppColors.accent),
               title: const Text('Edit'),
               onTap: () {
                 Navigator.of(ctx).pop();
@@ -434,8 +510,8 @@ class _ChatBubble extends StatelessWidget {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.delete_outline,
-                  color: AppColors.error),
+              leading:
+                  const Icon(Icons.delete_outline, color: AppColors.error),
               title: const Text('Delete',
                   style: TextStyle(color: AppColors.error)),
               onTap: () {

@@ -61,8 +61,6 @@ Future<List<RosterEntry>> teamRoster(
   TeamRosterRef ref,
   String teamId,
 ) async {
-  // ignore: avoid_print
-  print('[teamRosterProvider] building for teamId: $teamId');
   final repo = ref.watch(rosterRepositoryProvider);
 
   final memberships = await repo.getTeamRoster(teamId);

@@ -54,8 +54,6 @@ class FillInRepository {
     required String targetDivisionId,
     required String eventId,
   }) async {
-    print('[FillIn] getEligiblePlayers — clubId=$clubId targetDivisionId=$targetDivisionId eventId=$eventId');
-
     // Step 1: source division IDs from enabled fill-in rules
     final rulesResponse = await supabase
         .from('fill_in_rules')
@@ -68,7 +66,6 @@ class FillInRepository {
         .map((r) => r['source_division_id'] as String)
         .toList();
 
-    print('[FillIn] sourceDivisionIds: $sourceDivisionIds');
     if (sourceDivisionIds.isEmpty) return [];
 
     // Step 2: team IDs in those source divisions
@@ -81,7 +78,6 @@ class FillInRepository {
         .map((t) => t['id'] as String)
         .toList();
 
-    print('[FillIn] teamIds in source divisions: $teamIds');
     if (teamIds.isEmpty) return [];
 
     // Step 3: active player IDs in those teams
@@ -95,7 +91,6 @@ class FillInRepository {
         .map((r) => r['profile_id'] as String)
         .toSet();
 
-    print('[FillIn] active player candidates: ${allCandidateIds.length}');
     if (allCandidateIds.isEmpty) return [];
 
     // Step 4: already-rostered player IDs for this event
@@ -107,8 +102,6 @@ class FillInRepository {
         .map((r) => r['profile_id'] as String)
         .toSet();
 
-    print('[FillIn] already rostered: ${rosteredIds.length}');
-
     // Step 5: players with a pending fill-in request for this event
     final pendingResponse = await supabase
         .from('fill_in_requests')
@@ -119,14 +112,11 @@ class FillInRepository {
         .map((r) => r['player_id'] as String)
         .toSet();
 
-    print('[FillIn] already pending: ${pendingIds.length}');
-
     // Step 6: filter out rostered/pending, then fetch available profiles
     final eligibleIds = allCandidateIds
         .where((id) => !rosteredIds.contains(id) && !pendingIds.contains(id))
         .toList();
 
-    print('[FillIn] eligibleIds after exclusions: ${eligibleIds.length}');
     if (eligibleIds.isEmpty) return [];
 
     final profilesResponse = await supabase
@@ -139,7 +129,6 @@ class FillInRepository {
         .map((row) => Profile.fromJson(row as Map<String, dynamic>))
         .toList();
 
-    print('[FillIn] final eligible players (available this week): ${result.length}');
     return result;
   }
 

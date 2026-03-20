@@ -194,8 +194,6 @@ class _NotificationTile extends ConsumerWidget {
             ),
       isThreeLine: true,
       onTap: () async {
-        // ignore: avoid_print
-        print('[Alerts] tapped notification: ${notification.id} read=${notification.read}');
         if (!notification.read) {
           final repo = ref.read(notificationsRepositoryProvider);
           await repo.markAsRead(notification.id);

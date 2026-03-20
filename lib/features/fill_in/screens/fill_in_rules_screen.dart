@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:squadsync/core/supabase/supabase_client.dart';
 import 'package:squadsync/core/theme/app_theme.dart';
 import 'package:squadsync/features/fill_in/providers/fill_in_providers.dart';
 import 'package:squadsync/features/roster/providers/roster_providers.dart';
@@ -344,7 +343,7 @@ class _AddRuleSheetState extends ConsumerState<_AddRuleSheet> {
   }
 }
 
-class _DivisionsDropdowns extends StatelessWidget {
+class _DivisionsDropdowns extends ConsumerWidget {
   const _DivisionsDropdowns({
     required this.clubId,
     required this.sourceId,
@@ -360,69 +359,60 @@ class _DivisionsDropdowns extends StatelessWidget {
   final ValueChanged<String?> onTargetChanged;
 
   @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _fetchDivisions(),
-      builder: (ctx, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: AppColors.accent,
-            ),
-          );
-        }
-        final divs = snap.data ?? [];
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            DropdownButtonFormField<String>(
-              initialValue: sourceId,
-              decoration: const InputDecoration(
-                labelText: 'Players FROM',
-                border: OutlineInputBorder(),
-                labelStyle: TextStyle(color: AppColors.textSecondary),
-              ),
-              items: divs
-                  .map(
-                    (d) => DropdownMenuItem(
-                      value: d['id'] as String,
-                      child: Text(d['name'] as String),
-                    ),
-                  )
-                  .toList(),
-              onChanged: onSourceChanged,
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: targetId,
-              decoration: const InputDecoration(
-                labelText: 'Can fill in FOR',
-                border: OutlineInputBorder(),
-                labelStyle: TextStyle(color: AppColors.textSecondary),
-              ),
-              items: divs
-                  .map(
-                    (d) => DropdownMenuItem(
-                      value: d['id'] as String,
-                      child: Text(d['name'] as String),
-                    ),
-                  )
-                  .toList(),
-              onChanged: onTargetChanged,
-            ),
-          ],
-        );
-      },
-    );
-  }
+  Widget build(BuildContext context, WidgetRef ref) {
+    final divisionsAsync = ref.watch(clubDivisionsProvider);
 
-  Future<List<Map<String, dynamic>>> _fetchDivisions() async {
-    final response = await supabase
-        .from('divisions')
-        .select('id, name')
-        .eq('club_id', clubId)
-        .order('display_order');
-    return (response as List).cast<Map<String, dynamic>>();
+    return divisionsAsync.when(
+      loading: () => const Center(
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: AppColors.accent,
+        ),
+      ),
+      error: (e, _) => const Text(
+        'Failed to load divisions',
+        style: TextStyle(color: AppColors.error),
+      ),
+      data: (divs) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          DropdownButtonFormField<String>(
+            initialValue: sourceId,
+            decoration: const InputDecoration(
+              labelText: 'Players FROM',
+              border: OutlineInputBorder(),
+              labelStyle: TextStyle(color: AppColors.textSecondary),
+            ),
+            items: divs
+                .map(
+                  (d) => DropdownMenuItem(
+                    value: d.id,
+                    child: Text(d.name),
+                  ),
+                )
+                .toList(),
+            onChanged: onSourceChanged,
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: targetId,
+            decoration: const InputDecoration(
+              labelText: 'Can fill in FOR',
+              border: OutlineInputBorder(),
+              labelStyle: TextStyle(color: AppColors.textSecondary),
+            ),
+            items: divs
+                .map(
+                  (d) => DropdownMenuItem(
+                    value: d.id,
+                    child: Text(d.name),
+                  ),
+                )
+                .toList(),
+            onChanged: onTargetChanged,
+          ),
+        ],
+      ),
+    );
   }
 }
