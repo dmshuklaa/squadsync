@@ -232,12 +232,13 @@ class _PlayerProfileScreenState extends ConsumerState<PlayerProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                ListTile(
-                  leading: const Icon(Icons.email_outlined,
-                      color: AppColors.accent),
-                  title: Text(pending.email),
-                  onTap: () => _launch('mailto:${pending.email}'),
-                ),
+                if (pending.email != null && pending.email!.isNotEmpty)
+                  ListTile(
+                    leading: const Icon(Icons.email_outlined,
+                        color: AppColors.accent),
+                    title: Text(pending.email!),
+                    onTap: () => _launch('mailto:${pending.email}'),
+                  ),
                 if (pending.phone != null && pending.phone!.isNotEmpty)
                   ListTile(
                     leading: const Icon(Icons.phone_outlined,
@@ -260,6 +261,65 @@ class _PlayerProfileScreenState extends ConsumerState<PlayerProfileScreen> {
                     title: Text('#${pending.jerseyNumber}'),
                     subtitle: const Text('Jersey number'),
                   ),
+                // Join code section
+                if (pending.joinCode != null) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.accentSurface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: AppColors.accent.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Join code',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                              color: AppColors.textSecondary,
+                            )),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Text(
+                              pending.joinCode!,
+                              style: const TextStyle(
+                                fontFamily: 'monospace',
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.primary,
+                                letterSpacing: 2,
+                              ),
+                            ),
+                            const Spacer(),
+                            IconButton(
+                              icon: const Icon(Icons.copy_outlined,
+                                  color: AppColors.accent),
+                              tooltip: 'Copy code',
+                              onPressed: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                        'Join code copied: ${pending.joinCode}'),
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                        const Text(
+                          'Share this code so the player can join using the app.',
+                          style: TextStyle(
+                              fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 24),
                 OutlinedButton.icon(
                   icon: const Icon(Icons.send_outlined),
@@ -287,7 +347,7 @@ class _PlayerProfileScreenState extends ConsumerState<PlayerProfileScreen> {
           .read(playerProfileNotifierProvider.notifier)
           .resendInviteEmail(
             teamId: widget.teamId,
-            email: pending.email,
+            email: pending.email ?? '',
             fullName: pending.fullName,
           );
       if (!mounted) return;
@@ -769,10 +829,10 @@ class _PlayerProfileScreenState extends ConsumerState<PlayerProfileScreen> {
     required bool isOwn,
   }) {
     return _sectionCard(
-      title: 'Availability this week',
+      title: 'Availability',
       children: [
         SwitchListTile(
-          title: const Text('Available to play'),
+          title: const Text('Available this week'),
           subtitle: Text(
             'Shown to coaches for fill-in requests',
             style: TextStyle(fontSize: 12, color: Colors.grey[600]),
@@ -781,6 +841,19 @@ class _PlayerProfileScreenState extends ConsumerState<PlayerProfileScreen> {
           activeThumbColor: AppColors.primary,
           onChanged: isOwn
               ? (value) => _handleAvailabilityChange(value, profile)
+              : null,
+        ),
+        const Divider(height: 1, indent: 16, endIndent: 16),
+        SwitchListTile(
+          title: const Text('Default availability'),
+          subtitle: const Text(
+            'When off, marked unavailable each week automatically',
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
+          value: profile.defaultAvailability,
+          activeThumbColor: AppColors.primary,
+          onChanged: isOwn
+              ? (value) => _handleDefaultAvailabilityChange(value, profile)
               : null,
         ),
       ],
@@ -797,6 +870,25 @@ class _PlayerProfileScreenState extends ConsumerState<PlayerProfileScreen> {
             available: available,
             teamId: widget.teamId,
           );
+      if (!mounted) return;
+      SaveToast.show(context, 'Saved');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
+  }
+
+  Future<void> _handleDefaultAvailabilityChange(
+      bool available, Profile profile) async {
+    try {
+      await ref
+          .read(rosterRepositoryProvider)
+          .updateDefaultAvailability(
+            profileId: profile.id,
+            defaultAvailable: available,
+          );
+      ref.invalidate(profileByIdProvider(profile.id));
       if (!mounted) return;
       SaveToast.show(context, 'Saved');
     } catch (e) {

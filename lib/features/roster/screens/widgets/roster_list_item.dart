@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:squadsync/core/theme/app_theme.dart';
 import 'package:squadsync/shared/models/roster_entry.dart';
@@ -84,7 +85,23 @@ class RosterListItem extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            // Join code copy button (pending players with no email)
+            if (entry.isPending && entry.joinCode != null)
+              IconButton(
+                icon: const Icon(Icons.copy_outlined,
+                    size: 18, color: AppColors.accent),
+                tooltip: 'Copy join code',
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: entry.joinCode!));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Join code copied: ${entry.joinCode}'),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                },
+              ),
+            const SizedBox(width: 4),
             StatusBadge(entry.status),
           ],
         ),

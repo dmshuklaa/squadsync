@@ -15,6 +15,7 @@ class RosterEntry {
     required this.status,
     required this.isPending,
     required this.availabilityThisWeek,
+    this.joinCode,
   });
 
   final String id;
@@ -28,6 +29,9 @@ class RosterEntry {
   /// True when this entry comes from [pending_players] (no auth account yet).
   final bool isPending;
   final bool availabilityThisWeek;
+
+  /// Per-player join code — only set for pending players added without email.
+  final String? joinCode;
 
   static RosterEntry fromMembership(TeamMembership m) => RosterEntry(
         id: m.id,
@@ -46,8 +50,8 @@ class RosterEntry {
         profileId: '',
         // Guard: sendInvite fallback stores email as full_name when no name
         // is provided. Display the local-part only so raw emails never appear.
-        fullName: (p.fullName == p.email)
-            ? p.email.split('@').first
+        fullName: (p.email != null && p.fullName == p.email)
+            ? p.email!.split('@').first
             : p.fullName,
         avatarUrl: null,
         position: p.position,
@@ -55,5 +59,6 @@ class RosterEntry {
         status: MembershipStatus.pending,
         isPending: true,
         availabilityThisWeek: true,
+        joinCode: p.joinCode,
       );
 }

@@ -11,13 +11,13 @@ class Profile {
     this.clubId,
     this.pushToken,
     required this.availabilityThisWeek,
+    required this.defaultAvailability,
     required this.createdAt,
     required this.updatedAt,
   });
 
   final String id;
   final String fullName;
-  // Denormalised from auth.users — nullable for profiles created before migration 004
   final String? email;
   final String? phone;
   final String? avatarUrl;
@@ -25,6 +25,7 @@ class Profile {
   final String? clubId;
   final String? pushToken;
   final bool availabilityThisWeek;
+  final bool defaultAvailability;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -38,7 +39,8 @@ class Profile {
       role: UserRole.fromString(json['role'] as String),
       clubId: json['club_id'] as String?,
       pushToken: json['push_token'] as String?,
-      availabilityThisWeek: json['availability_this_week'] as bool,
+      availabilityThisWeek: json['availability_this_week'] as bool? ?? true,
+      defaultAvailability: json['default_availability'] as bool? ?? true,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
     );
@@ -55,6 +57,7 @@ class Profile {
       'club_id': clubId,
       'push_token': pushToken,
       'availability_this_week': availabilityThisWeek,
+      'default_availability': defaultAvailability,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -70,6 +73,7 @@ class Profile {
     String? clubId,
     String? pushToken,
     bool? availabilityThisWeek,
+    bool? defaultAvailability,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -83,6 +87,7 @@ class Profile {
       clubId: clubId ?? this.clubId,
       pushToken: pushToken ?? this.pushToken,
       availabilityThisWeek: availabilityThisWeek ?? this.availabilityThisWeek,
+      defaultAvailability: defaultAvailability ?? this.defaultAvailability,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

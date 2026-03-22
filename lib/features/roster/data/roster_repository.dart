@@ -30,11 +30,7 @@ class RosterRepository {
         .toList();
   }
 
-  /// Returns teams accessible to [profileId] based on [role]:
-  /// - club_admin / coach: all teams in the club (via divisions join)
-  /// - player / parent: only teams where they have an active membership
-  ///
-  /// Each [Team] has [divisionName] populated from the joined divisions row.
+  /// Returns teams accessible to [profileId] based on [role].
   Future<List<Team>> getTeamsForUser({
     required String profileId,
     required String clubId,
@@ -43,8 +39,6 @@ class RosterRepository {
     List<Team> teams;
 
     if (role == UserRole.clubAdmin || role == UserRole.coach) {
-      // Step 1: fetch club_id directly from the profile row to avoid relying
-      // on the caller-supplied value which may be stale for join-code admins.
       final profileResponse = await supabase
           .from('profiles')
           .select('club_id')
@@ -54,9 +48,6 @@ class RosterRepository {
 
       if (resolvedClubId == null) return [];
 
-      // Step 2: fetch all teams in that club via divisions!inner so that
-      // RLS-blocked division rows are excluded (inner join) rather than
-      // returned as nulls and then silently filtered out.
       final response = await supabase
           .from('teams')
           .select(
@@ -70,7 +61,6 @@ class RosterRepository {
           .map((row) => Team.fromJson(row as Map<String, dynamic>))
           .toList();
     } else {
-      // player / parent: only active-membership teams
       final response = await supabase
           .from('team_memberships')
           .select(
@@ -92,10 +82,6 @@ class RosterRepository {
           .toList();
     }
 
-    // Fallback: if the role-based query returned nothing (e.g. admin1 who
-    // joined via join code has a team_membership but the club-level teams
-    // query returned empty due to RLS or division filter), try fetching
-    // via team_memberships directly for any active membership.
     if (teams.isEmpty) {
       final fallback = await supabase
           .from('team_memberships')
@@ -122,95 +108,84 @@ class RosterRepository {
 
   // ── Add player ───────────────────────────────────────────────
 
-  /// Adds a player manually to [teamId].
-  ///
-  /// If a profile with [email] already exists the player is linked directly
-  /// (membership status = active). If not, an entry is created in
-  /// [pending_players] — no Supabase auth account or Edge Function is needed.
   Future<void> addPlayerManually({
     required String teamId,
     required String clubId,
     required String fullName,
-    required String email,
+    String? email,
     String? phone,
     String? position,
     int? jerseyNumber,
   }) async {
-    // 1. Check if a real profile with this email already exists
-    final existingProfile = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', email)
-        .maybeSingle();
-
-    if (existingProfile != null) {
-      // 2a. Profile exists — check for duplicate membership
-      final profileId = existingProfile['id'] as String;
-
-      final existingMembership = await supabase
-          .from('team_memberships')
+    if (email != null && email.isNotEmpty) {
+      final existingProfile = await supabase
+          .from('profiles')
           .select('id')
-          .eq('team_id', teamId)
-          .eq('profile_id', profileId)
+          .eq('email', email)
           .maybeSingle();
 
-      if (existingMembership != null) {
-        throw Exception('This player is already on the team');
+      if (existingProfile != null) {
+        final profileId = existingProfile['id'] as String;
+
+        final existingMembership = await supabase
+            .from('team_memberships')
+            .select('id')
+            .eq('team_id', teamId)
+            .eq('profile_id', profileId)
+            .maybeSingle();
+
+        if (existingMembership != null) {
+          throw Exception('This player is already on the team');
+        }
+
+        await supabase.from('team_memberships').insert({
+          'team_id': teamId,
+          'profile_id': profileId,
+          'position': position,
+          'jersey_number': jerseyNumber,
+          'status': MembershipStatus.active.toJson(),
+        });
+        return;
       }
 
-      await supabase.from('team_memberships').insert({
-        'team_id': teamId,
-        'profile_id': profileId,
-        'position': position,
-        'jersey_number': jerseyNumber,
-        'status': MembershipStatus.active.toJson(),
-      });
-      return;
+      final existingPending = await supabase
+          .from('pending_players')
+          .select('id')
+          .eq('team_id', teamId)
+          .eq('email', email)
+          .maybeSingle();
+
+      if (existingPending != null) {
+        throw Exception('An invite for this email is already pending');
+      }
     }
 
-    // 2b. Check if already in pending_players for this team
-    final existingPending = await supabase
-        .from('pending_players')
-        .select('id')
-        .eq('team_id', teamId)
-        .eq('email', email)
-        .maybeSingle();
-
-    if (existingPending != null) {
-      throw Exception('An invite for this email is already pending');
-    }
-
-    // 3. No profile yet — insert into pending_players (no Edge Function needed)
     final currentUser = supabase.auth.currentUser;
     if (currentUser == null) throw Exception('Not authenticated');
+
+    final joinCode = email == null || email.isEmpty
+        ? generatePlayerJoinCode()
+        : null;
 
     final pendingData = <String, dynamic>{
       'team_id': teamId,
       'club_id': clubId,
       'full_name': fullName,
-      'email': email,
+      'email': email?.isNotEmpty == true ? email : null,
       'position': position,
       'jersey_number': jerseyNumber,
       'invited_by': currentUser.id,
+      'join_code': joinCode,
     };
     if (phone != null && phone.isNotEmpty) pendingData['phone'] = phone;
-    // No .select() to avoid RLS SELECT policy issues
     await supabase.from('pending_players').insert(pendingData);
   }
 
-  /// Sends an invitation email to [email] and adds them to [teamId].
-  ///
-  /// If a real profile exists they are linked as active (no email sent).
-  /// If not, the send-invite Edge Function is called to create an auth user
-  /// and send the magic-link email. If the Edge Function is not yet deployed,
-  /// falls back to creating a [pending_players] entry so the invite still
-  /// appears in the roster list.
   Future<void> sendInvite({
     required String teamId,
     required String email,
     String? fullName,
   }) async {
-    // 1. Check for existing real profile
     final existingProfile = await supabase
         .from('profiles')
         .select('id')
@@ -239,7 +214,6 @@ class RosterRepository {
       return;
     }
 
-    // 2. Try Edge Function to create auth user + send magic-link email
     bool edgeFunctionSucceeded = false;
     try {
       final response = await supabase.functions.invoke(
@@ -277,13 +251,11 @@ class RosterRepository {
         debugPrint('send-invite returned ${response.status} — falling back');
       }
     } catch (e) {
-      // Edge Function not deployed yet — fall back to pending_players
       debugPrint('send-invite not available: $e');
     }
 
     if (edgeFunctionSucceeded) return;
 
-    // 3. Fallback: Edge Function unavailable — store in pending_players
     final existingPending = await supabase
         .from('pending_players')
         .select('id')
@@ -315,127 +287,284 @@ class RosterRepository {
     });
   }
 
-  /// Imports [players] in batches of 20 into [teamId].
+  // ── Division / team helpers ───────────────────────────────────
+
+  /// Finds an existing division with [name] in [clubId] or creates one.
+  /// Returns the division id.
+  Future<String> findOrCreateDivision({
+    required String clubId,
+    required String name,
+  }) async {
+    final existing = await supabase
+        .from('divisions')
+        .select('id')
+        .eq('club_id', clubId)
+        .ilike('name', name.trim())
+        .maybeSingle();
+
+    if (existing != null) return existing['id'] as String;
+
+    // Get max display_order
+    final maxOrder = await supabase
+        .from('divisions')
+        .select('display_order')
+        .eq('club_id', clubId)
+        .order('display_order', ascending: false)
+        .limit(1)
+        .maybeSingle();
+
+    final nextOrder = ((maxOrder?['display_order'] as int?) ?? 0) + 1;
+
+    final inserted = await supabase.from('divisions').insert({
+      'club_id': clubId,
+      'name': name.trim(),
+      'display_order': nextOrder,
+    }).select('id').single();
+
+    return inserted['id'] as String;
+  }
+
+  /// Finds an existing team with [name] in [divisionId] or creates one.
+  /// Returns the team id.
+  Future<String> findOrCreateTeam({
+    required String divisionId,
+    required String name,
+  }) async {
+    final existing = await supabase
+        .from('teams')
+        .select('id')
+        .eq('division_id', divisionId)
+        .ilike('name', name.trim())
+        .maybeSingle();
+
+    if (existing != null) return existing['id'] as String;
+
+    final currentYear = DateTime.now().year.toString();
+    final inserted = await supabase.from('teams').insert({
+      'division_id': divisionId,
+      'name': name.trim(),
+      'season': currentYear,
+    }).select('id').single();
+
+    return inserted['id'] as String;
+  }
+
+  /// Imports [players] into [teamId].
   ///
-  /// Each player is either linked (profile found by email → active membership)
-  /// or invited (new auth user created → pending membership + invite email sent).
-  /// Reports progress via [onProgress] callback.
+  /// - Players with email: linked to existing profile or invited via Edge Function.
+  /// - Players without email: inserted directly into pending_players with a
+  ///   generated 8-char join code.
+  /// - Division/team columns auto-create divisions and teams if needed.
   Future<ImportResult> importPlayers({
     required String teamId,
+    required String clubId,
     required List<PlayerImportRow> players,
     void Function(int current, int total)? onProgress,
   }) async {
     int linkedCount = 0;
     int invitedCount = 0;
+    int pendingCount = 0;
     int skippedCount = 0;
     final List<SkippedRow> skippedRows = [];
+    final List<({String name, String joinCode})> playersWithCodes = [];
 
-    const batchSize = 20;
+    // Cache division/team lookups to avoid repeated DB calls
+    final divisionCache = <String, String>{}; // name → id
+    final teamCache = <String, String>{}; // '$divisionId:$name' → id
 
-    for (int i = 0; i < players.length; i += batchSize) {
-      final batch =
-          players.sublist(i, (i + batchSize).clamp(0, players.length));
+    final currentUser = supabase.auth.currentUser;
+    if (currentUser == null) throw Exception('Not authenticated');
 
-      for (int j = 0; j < batch.length; j++) {
-        final player = batch[j];
-        final rowNumber = i + j + 2; // row 1 = headers; data is 0-indexed
-        onProgress?.call(i + j + 1, players.length);
+    for (int i = 0; i < players.length; i++) {
+      final player = players[i];
+      final rowNumber = i + 2;
+      onProgress?.call(i + 1, players.length);
 
-        try {
-          // Check for existing profile
+      try {
+        // Resolve target team (default to passed teamId)
+        String targetTeamId = teamId;
+
+        if (player.division != null || player.team != null) {
+          String? divisionId;
+
+          if (player.division != null) {
+            final divKey = player.division!.trim().toLowerCase();
+            divisionId = divisionCache[divKey] ??
+                await findOrCreateDivision(
+                  clubId: clubId,
+                  name: player.division!,
+                );
+            divisionCache[divKey] = divisionId;
+          } else {
+            // No division column — get division from default team
+            final teamRow = await supabase
+                .from('teams')
+                .select('division_id')
+                .eq('id', teamId)
+                .maybeSingle();
+            divisionId = teamRow?['division_id'] as String?;
+          }
+
+          if (player.team != null && divisionId != null) {
+            final teamKey = '$divisionId:${player.team!.trim().toLowerCase()}';
+            targetTeamId = teamCache[teamKey] ??
+                await findOrCreateTeam(
+                  divisionId: divisionId,
+                  name: player.team!,
+                );
+            teamCache[teamKey] = targetTeamId;
+          }
+        }
+
+        if (player.email != null && player.email!.isNotEmpty) {
+          // ── Has email — existing invite/link flow ──────────────
           final existing = await supabase
               .from('profiles')
               .select('id')
-              .eq('email', player.email)
+              .eq('email', player.email!)
               .maybeSingle();
 
-          String profileId;
-          bool isNew;
-
           if (existing != null) {
-            profileId = existing['id'] as String;
-            isNew = false;
-          } else {
-            final response = await supabase.functions.invoke(
-              'send-invite',
-              body: {
-                'email': player.email,
-                'fullName': player.fullName.isNotEmpty
-                    ? player.fullName
-                    : player.email,
-                'teamId': teamId,
-                'sendEmail': true,
-              },
-            );
-            if (response.status != 200) {
+            final profileId = existing['id'] as String;
+            final existingMembership = await supabase
+                .from('team_memberships')
+                .select('id')
+                .eq('team_id', targetTeamId)
+                .eq('profile_id', profileId)
+                .maybeSingle();
+
+            if (existingMembership != null) {
               skippedCount++;
               skippedRows.add(SkippedRow(
                 rowNumber: rowNumber,
                 email: player.email,
-                reason: 'Failed to create account',
+                reason: 'Already a member',
               ));
               continue;
             }
-            final data = response.data as Map<String, dynamic>;
-            profileId = data['userId'] as String;
-            isNew = data['isNew'] as bool? ?? true;
+
+            await supabase.from('team_memberships').insert({
+              'team_id': targetTeamId,
+              'profile_id': profileId,
+              'position': player.position,
+              'jersey_number': player.jerseyNumber,
+              'status': MembershipStatus.active.toJson(),
+            });
+            linkedCount++;
+          } else {
+            // Try Edge Function
+            bool edgeFunctionSucceeded = false;
+            try {
+              final response = await supabase.functions.invoke(
+                'send-invite',
+                body: {
+                  'email': player.email,
+                  'fullName': player.fullName.isNotEmpty
+                      ? player.fullName
+                      : player.email,
+                  'teamId': targetTeamId,
+                  'sendEmail': true,
+                },
+              );
+              if (response.status == 200) {
+                final data = response.data as Map<String, dynamic>;
+                final profileId = data['userId'] as String;
+                final isNew = data['isNew'] as bool? ?? true;
+
+                final existingMembership = await supabase
+                    .from('team_memberships')
+                    .select('id')
+                    .eq('team_id', targetTeamId)
+                    .eq('profile_id', profileId)
+                    .maybeSingle();
+
+                if (existingMembership == null) {
+                  await supabase.from('team_memberships').insert({
+                    'team_id': targetTeamId,
+                    'profile_id': profileId,
+                    'position': player.position,
+                    'jersey_number': player.jerseyNumber,
+                    'status': isNew
+                        ? MembershipStatus.pending.toJson()
+                        : MembershipStatus.active.toJson(),
+                  });
+                }
+                edgeFunctionSucceeded = true;
+                invitedCount++;
+              }
+            } catch (_) {}
+
+            if (!edgeFunctionSucceeded) {
+              // Fallback — pending_players with email
+              final existingPending = await supabase
+                  .from('pending_players')
+                  .select('id')
+                  .eq('team_id', targetTeamId)
+                  .eq('email', player.email!)
+                  .maybeSingle();
+
+              if (existingPending != null) {
+                skippedCount++;
+                skippedRows.add(SkippedRow(
+                  rowNumber: rowNumber,
+                  email: player.email,
+                  reason: 'Already pending',
+                ));
+                continue;
+              }
+
+              await supabase.from('pending_players').insert({
+                'team_id': targetTeamId,
+                'club_id': clubId,
+                'full_name': player.fullName.isNotEmpty
+                    ? player.fullName
+                    : player.email,
+                'email': player.email,
+                'position': player.position,
+                'jersey_number': player.jerseyNumber,
+                'invited_by': currentUser.id,
+              });
+              invitedCount++;
+            }
           }
+        } else {
+          // ── No email — create pending_players with join code ──
+          final joinCode = generatePlayerJoinCode();
 
-          // Skip if already a member
-          final existingMembership = await supabase
-              .from('team_memberships')
-              .select('id')
-              .eq('team_id', teamId)
-              .eq('profile_id', profileId)
-              .maybeSingle();
-
-          if (existingMembership != null) {
-            skippedCount++;
-            skippedRows.add(SkippedRow(
-              rowNumber: rowNumber,
-              email: player.email,
-              reason: 'Already a member',
-            ));
-            continue;
-          }
-
-          await supabase.from('team_memberships').insert({
-            'team_id': teamId,
-            'profile_id': profileId,
+          await supabase.from('pending_players').insert({
+            'team_id': targetTeamId,
+            'club_id': clubId,
+            'full_name': player.fullName,
             'position': player.position,
             'jersey_number': player.jerseyNumber,
-            'status': isNew
-                ? MembershipStatus.pending.toJson()
-                : MembershipStatus.active.toJson(),
+            'join_code': joinCode,
+            'invited_by': currentUser.id,
           });
-
-          if (isNew) {
-            invitedCount++;
-          } else {
-            linkedCount++;
-          }
-        } catch (e) {
-          skippedCount++;
-          skippedRows.add(SkippedRow(
-            rowNumber: rowNumber,
-            email: player.email,
-            reason: e.toString(),
-          ));
+          playersWithCodes.add((name: player.fullName, joinCode: joinCode));
+          pendingCount++;
         }
+      } catch (e) {
+        skippedCount++;
+        skippedRows.add(SkippedRow(
+          rowNumber: rowNumber,
+          email: player.email,
+          reason: e.toString(),
+        ));
       }
     }
 
     return ImportResult(
       totalRows: players.length,
-      successCount: linkedCount + invitedCount,
+      successCount: linkedCount + invitedCount + pendingCount,
       linkedCount: linkedCount,
       invitedCount: invitedCount,
+      pendingCount: pendingCount,
       skippedCount: skippedCount,
       skippedRows: skippedRows,
+      playersWithCodes: playersWithCodes,
     );
   }
 
-  /// Returns all [PendingPlayer] records for [teamId], ordered by full_name.
   Future<List<PendingPlayer>> getPendingPlayers(String teamId) async {
     final response = await supabase
         .from('pending_players')
@@ -450,13 +579,13 @@ class RosterRepository {
 
   // ── Player profile ───────────────────────────────────────────
 
-  /// Fetches a single [Profile] by [profileId]. Returns null if not found.
   Future<Profile?> getProfileById(String profileId) async {
     final data = await supabase
         .from('profiles')
         .select(
           'id, full_name, email, phone, avatar_url, role, club_id, '
-          'push_token, availability_this_week, created_at, updated_at',
+          'push_token, availability_this_week, default_availability, '
+          'created_at, updated_at',
         )
         .eq('id', profileId)
         .maybeSingle();
@@ -465,8 +594,6 @@ class RosterRepository {
     return Profile.fromJson(data);
   }
 
-  /// Fetches a single [PendingPlayer] by [pendingPlayerId].
-  /// Returns null if not found.
   Future<PendingPlayer?> getPendingPlayerById(String pendingPlayerId) async {
     final data = await supabase
         .from('pending_players')
@@ -478,8 +605,6 @@ class RosterRepository {
     return PendingPlayer.fromJson(data);
   }
 
-  /// Fetches the [TeamMembership] for [profileId] in [teamId].
-  /// Returns null if no membership exists.
   Future<TeamMembership?> getMembershipForPlayer({
     required String profileId,
     required String teamId,
@@ -499,7 +624,6 @@ class RosterRepository {
     return TeamMembership.fromJson(data);
   }
 
-  /// Updates the [status] column of a team membership.
   Future<void> updateMembershipStatus({
     required String membershipId,
     required MembershipStatus status,
@@ -510,7 +634,6 @@ class RosterRepository {
         .eq('id', membershipId);
   }
 
-  /// Updates [position] and [jerseyNumber] on a team membership.
   Future<void> updateMembershipDetails({
     required String membershipId,
     String? position,
@@ -522,7 +645,6 @@ class RosterRepository {
     }).eq('id', membershipId);
   }
 
-  /// Updates [availability_this_week] on a profile (own profile only — RLS enforced).
   Future<void> updateAvailability({
     required String profileId,
     required bool available,
@@ -533,8 +655,16 @@ class RosterRepository {
         .eq('id', profileId);
   }
 
-  /// Returns fill-in history for [profileId], limited to 20 rows.
-  /// Returns an empty list if the [fill_in_log] table does not exist yet.
+  Future<void> updateDefaultAvailability({
+    required String profileId,
+    required bool defaultAvailable,
+  }) async {
+    await supabase
+        .from('profiles')
+        .update({'default_availability': defaultAvailable})
+        .eq('id', profileId);
+  }
+
   Future<List<Map<String, dynamic>>> getFillInHistory(
       String profileId) async {
     try {
@@ -547,12 +677,10 @@ class RosterRepository {
 
       return (response as List).cast<Map<String, dynamic>>();
     } catch (_) {
-      // Table does not exist yet (Sprint 3) — return empty list
       return [];
     }
   }
 
-  /// Returns guardian links for [playerProfileId], joining guardian profile data.
   Future<List<GuardianLink>> getGuardianLinks(
       String playerProfileId) async {
     try {
@@ -573,7 +701,6 @@ class RosterRepository {
     }
   }
 
-  /// Deletes a pending_players row by [pendingPlayerId].
   Future<void> deletePendingPlayer(String pendingPlayerId) async {
     await supabase
         .from('pending_players')
@@ -581,8 +708,6 @@ class RosterRepository {
         .eq('id', pendingPlayerId);
   }
 
-  /// Calls the send-invite Edge Function to resend a magic-link email.
-  /// Does not create a new pending_player row — the player is already listed.
   Future<void> resendInviteEmail({
     required String teamId,
     required String email,
@@ -599,21 +724,19 @@ class RosterRepository {
         },
       );
     } catch (e) {
-      // Edge Function not yet deployed — silently succeed (nothing to resend)
       debugPrint('send-invite not available for resend: $e');
     }
   }
 
   // ── Guardian link management ──────────────────────────────────
 
-  /// Searches for a profile by [email] (case-insensitive).
-  /// Returns null if no profile is found.
   Future<Profile?> searchProfileByEmail(String email) async {
     final data = await supabase
         .from('profiles')
         .select(
           'id, full_name, email, phone, avatar_url, role, club_id, '
-          'push_token, availability_this_week, created_at, updated_at',
+          'push_token, availability_this_week, default_availability, '
+          'created_at, updated_at',
         )
         .ilike('email', email.trim())
         .maybeSingle();
@@ -622,8 +745,6 @@ class RosterRepository {
     return Profile.fromJson(data);
   }
 
-  /// Creates a guardian link request (confirmed = false).
-  /// Throws if the link already exists.
   Future<void> createGuardianLinkRequest({
     required String playerProfileId,
     required String guardianProfileId,
@@ -640,7 +761,6 @@ class RosterRepository {
       throw Exception('This guardian is already linked to this player');
     }
 
-    // No .select() to avoid RLS SELECT policy issues on insert
     await supabase.from('guardian_links').insert({
       'player_profile_id': playerProfileId,
       'guardian_profile_id': guardianProfileId,
@@ -648,7 +768,6 @@ class RosterRepository {
       'confirmed': false,
     });
 
-    // Notify the guardian of the pending request
     try {
       final playerData = await supabase
           .from('profiles')
@@ -668,7 +787,6 @@ class RosterRepository {
     } catch (_) {}
   }
 
-  /// Confirms a pending guardian link (guardian accepts).
   Future<void> confirmGuardianLink(String guardianLinkId) async {
     await supabase
         .from('guardian_links')
@@ -676,7 +794,6 @@ class RosterRepository {
         .eq('id', guardianLinkId)
         .eq('guardian_profile_id', supabase.auth.currentUser!.id);
 
-    // Notify the player that their guardian link was confirmed
     try {
       final linkData = await supabase
           .from('guardian_links')
@@ -704,7 +821,6 @@ class RosterRepository {
     } catch (_) {}
   }
 
-  /// Declines and removes a pending guardian link (guardian declines).
   Future<void> declineGuardianLink(String guardianLinkId) async {
     await supabase
         .from('guardian_links')
@@ -713,7 +829,6 @@ class RosterRepository {
         .eq('guardian_profile_id', supabase.auth.currentUser!.id);
   }
 
-  /// Removes a confirmed or pending guardian link (admin or guardian).
   Future<void> removeGuardianLink(String guardianLinkId) async {
     await supabase
         .from('guardian_links')
@@ -721,8 +836,6 @@ class RosterRepository {
         .eq('id', guardianLinkId);
   }
 
-  /// Returns unconfirmed guardian link requests where the current user
-  /// is the guardian, joining the player's profile fields.
   Future<List<GuardianLink>> getPendingGuardianRequests() async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return [];
@@ -739,9 +852,6 @@ class RosterRepository {
           .eq('confirmed', false);
 
       return (response as List).map((row) {
-        // Remap: the join is on player_profile_id, so profiles = player info.
-        // We store it in guardianFullName/guardianAvatarUrl but re-interpret
-        // in the UI as playerFullName/playerAvatarUrl.
         return GuardianLink.fromJson(row as Map<String, dynamic>);
       }).toList();
     } catch (_) {
@@ -749,7 +859,6 @@ class RosterRepository {
     }
   }
 
-  /// Returns a single [Team] by [teamId]. Returns null if not found.
   Future<Team?> getTeamById(String teamId) async {
     final data = await supabase
         .from('teams')
@@ -761,7 +870,6 @@ class RosterRepository {
     return Team.fromJson(data);
   }
 
-  /// Updates squad_size and playing_xi_size for [teamId].
   Future<void> updateTeamSquadSize({
     required String teamId,
     int? squadSize,
@@ -773,7 +881,6 @@ class RosterRepository {
     }).eq('id', teamId);
   }
 
-  /// Returns the count of active members in [clubId].
   Future<int> getActiveMemberCount(String clubId) async {
     final response = await supabase
         .from('profiles')
@@ -784,7 +891,6 @@ class RosterRepository {
     return (response as List).length;
   }
 
-  /// Returns all divisions for a club, ordered by display_order.
   Future<List<Division>> getDivisionsForClub(String clubId) async {
     final response = await supabase
         .from('divisions')
@@ -795,5 +901,95 @@ class RosterRepository {
     return (response as List)
         .map((row) => Division.fromJson(row as Map<String, dynamic>))
         .toList();
+  }
+
+  /// Returns all teams in [divisionId].
+  Future<List<Team>> getTeamsForDivision(String divisionId) async {
+    final response = await supabase
+        .from('teams')
+        .select('id, division_id, name, season, created_at')
+        .eq('division_id', divisionId)
+        .order('name');
+
+    return (response as List)
+        .map((row) => Team.fromJson(row as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Creates a new division in [clubId].
+  Future<void> createDivision({
+    required String clubId,
+    required String name,
+    String? firstTeamName,
+  }) async {
+    final maxOrder = await supabase
+        .from('divisions')
+        .select('display_order')
+        .eq('club_id', clubId)
+        .order('display_order', ascending: false)
+        .limit(1)
+        .maybeSingle();
+
+    final nextOrder = ((maxOrder?['display_order'] as int?) ?? 0) + 1;
+
+    final divisionRow = await supabase.from('divisions').insert({
+      'club_id': clubId,
+      'name': name.trim(),
+      'display_order': nextOrder,
+    }).select('id').single();
+
+    final divisionId = divisionRow['id'] as String;
+
+    if (firstTeamName != null && firstTeamName.trim().isNotEmpty) {
+      await supabase.from('teams').insert({
+        'division_id': divisionId,
+        'name': firstTeamName.trim(),
+        'season': DateTime.now().year.toString(),
+      });
+    }
+  }
+
+  /// Creates a team in [divisionId].
+  Future<void> createTeam({
+    required String divisionId,
+    required String name,
+  }) async {
+    await supabase.from('teams').insert({
+      'division_id': divisionId,
+      'name': name.trim(),
+      'season': DateTime.now().year.toString(),
+    });
+  }
+
+  /// Renames a division.
+  Future<void> renameDivision({
+    required String divisionId,
+    required String name,
+  }) async {
+    await supabase
+        .from('divisions')
+        .update({'name': name.trim()})
+        .eq('id', divisionId);
+  }
+
+  /// Renames a team.
+  Future<void> renameTeam({
+    required String teamId,
+    required String name,
+  }) async {
+    await supabase
+        .from('teams')
+        .update({'name': name.trim()})
+        .eq('id', teamId);
+  }
+
+  /// Deletes a division (and all teams in it via cascade).
+  Future<void> deleteDivision(String divisionId) async {
+    await supabase.from('divisions').delete().eq('id', divisionId);
+  }
+
+  /// Deletes a team.
+  Future<void> deleteTeam(String teamId) async {
+    await supabase.from('teams').delete().eq('id', teamId);
   }
 }

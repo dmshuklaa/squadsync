@@ -4,11 +4,12 @@ class PendingPlayer {
     required this.teamId,
     required this.clubId,
     required this.fullName,
-    required this.email,
+    this.email,
     this.phone,
     this.position,
     this.jerseyNumber,
     this.invitedBy,
+    this.joinCode,
     required this.createdAt,
   });
 
@@ -16,11 +17,12 @@ class PendingPlayer {
   final String teamId;
   final String clubId;
   final String fullName;
-  final String email;
+  final String? email;
   final String? phone;
   final String? position;
   final int? jerseyNumber;
   final String? invitedBy;
+  final String? joinCode;
   final DateTime createdAt;
 
   factory PendingPlayer.fromJson(Map<String, dynamic> json) {
@@ -29,11 +31,12 @@ class PendingPlayer {
       teamId: json['team_id'] as String,
       clubId: json['club_id'] as String,
       fullName: json['full_name'] as String,
-      email: json['email'] as String,
+      email: json['email'] as String?,
       phone: json['phone'] as String?,
       position: json['position'] as String?,
       jerseyNumber: json['jersey_number'] as int?,
       invitedBy: json['invited_by'] as String?,
+      joinCode: json['join_code'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
     );
   }
@@ -49,6 +52,7 @@ class PendingPlayer {
       'position': position,
       'jersey_number': jerseyNumber,
       'invited_by': invitedBy,
+      'join_code': joinCode,
       'created_at': createdAt.toIso8601String(),
     };
   }
@@ -63,6 +67,7 @@ class PendingPlayer {
     String? position,
     int? jerseyNumber,
     String? invitedBy,
+    String? joinCode,
     DateTime? createdAt,
   }) {
     return PendingPlayer(
@@ -75,6 +80,7 @@ class PendingPlayer {
       position: position ?? this.position,
       jerseyNumber: jerseyNumber ?? this.jerseyNumber,
       invitedBy: invitedBy ?? this.invitedBy,
+      joinCode: joinCode ?? this.joinCode,
       createdAt: createdAt ?? this.createdAt,
     );
   }

@@ -16,7 +16,7 @@ class AddPlayerNotifier extends _$AddPlayerNotifier {
   Future<void> addManually({
     required String teamId,
     required String fullName,
-    required String email,
+    String? email,
     String? phone,
     String? position,
     int? jerseyNumber,
@@ -63,9 +63,6 @@ class AddPlayerNotifier extends _$AddPlayerNotifier {
   }
 
   /// Imports [players] into [teamId] and returns the [ImportResult].
-  ///
-  /// Progress is reported via [onProgress] so the screen can update
-  /// a live counter without polling.
   Future<ImportResult> importPlayers({
     required String teamId,
     required List<PlayerImportRow> players,
@@ -73,8 +70,11 @@ class AddPlayerNotifier extends _$AddPlayerNotifier {
   }) async {
     state = const AsyncLoading();
     try {
+      final profile = await ref.read(currentProfileProvider.future);
+      final clubId = profile.clubId ?? '';
       final result = await _repo.importPlayers(
         teamId: teamId,
+        clubId: clubId,
         players: players,
         onProgress: onProgress,
       );

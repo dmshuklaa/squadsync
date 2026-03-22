@@ -6,12 +6,24 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
 
+import 'package:squadsync/core/config/app_config.dart';
 import 'package:squadsync/core/theme/app_theme.dart';
 import 'package:squadsync/core/utils/validators.dart';
 import 'package:squadsync/features/roster/data/csv_mapper.dart';
 import 'package:squadsync/features/roster/providers/add_player_provider.dart';
+
+/// Data model for extracted teams from photo import.
+class _PhotoTeam {
+  _PhotoTeam({required this.name, this.division, required this.players});
+  String name;
+  String? division;
+  List<String> players;
+  bool include = true;
+}
 
 class AddPlayerScreen extends ConsumerStatefulWidget {
   const AddPlayerScreen({super.key, this.teamId});
@@ -60,6 +72,14 @@ class _AddPlayerScreenState extends ConsumerState<AddPlayerScreen> {
   ImportResult? _importResult;
   bool _isImporting = false;
 
+  // ── Tab 4: Photo import ───────────────────────────────────────
+  // Step 0 = pick image, 1 = sending to API, 2 = review, 3 = results
+  int _photoStep = 0;
+  bool _photoLoading = false;
+  String? _photoError;
+  List<_PhotoTeam> _photoTeams = [];
+  ImportResult? _photoImportResult;
+
   @override
   void dispose() {
     _fullNameCtrl.dispose();
@@ -106,7 +126,9 @@ class _AddPlayerScreenState extends ConsumerState<AddPlayerScreen> {
       await ref.read(addPlayerNotifierProvider.notifier).addManually(
             teamId: teamId,
             fullName: _fullNameCtrl.text.trim(),
-            email: _emailCtrl.text.trim(),
+            email: _emailCtrl.text.trim().isEmpty
+                ? null
+                : _emailCtrl.text.trim(),
             phone: _phoneCtrl.text.trim().isEmpty
                 ? null
                 : _phoneCtrl.text.trim(),
@@ -237,16 +259,9 @@ class _AddPlayerScreenState extends ConsumerState<AddPlayerScreen> {
       if (player != null) {
         valid.add(player);
       } else {
-        final emailHeader = _columnMappings
-            .where((m) => m.mappedField == SquadSyncField.email)
-            .map((m) => m.originalHeader)
-            .firstOrNull;
         skipped.add(SkippedRow(
           rowNumber: i + 2,
-          email: emailHeader != null
-              ? row[emailHeader]?.toString()
-              : null,
-          reason: 'Missing or invalid email',
+          reason: 'Missing name',
         ));
       }
     }
@@ -346,7 +361,7 @@ class _AddPlayerScreenState extends ConsumerState<AddPlayerScreen> {
     }
 
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Add Player'),
@@ -361,6 +376,7 @@ class _AddPlayerScreenState extends ConsumerState<AddPlayerScreen> {
               Tab(text: 'Manually'),
               Tab(text: 'Invite'),
               Tab(text: 'Import CSV'),
+              Tab(icon: Icon(Icons.camera_alt_outlined, size: 20), text: 'Photo'),
             ],
           ),
         ),
@@ -369,6 +385,7 @@ class _AddPlayerScreenState extends ConsumerState<AddPlayerScreen> {
             _buildManualTab(isLoading),
             _buildInviteTab(isLoading),
             _buildCsvTab(),
+            _buildPhotoTab(),
           ],
         ),
       ),
@@ -403,8 +420,7 @@ class _AddPlayerScreenState extends ConsumerState<AddPlayerScreen> {
               textInputAction: TextInputAction.next,
               keyboardType: TextInputType.emailAddress,
               enabled: !isLoading,
-              decoration: const InputDecoration(labelText: 'Email'),
-              validator: Validators.email,
+              decoration: const InputDecoration(labelText: 'Email (optional)'),
             ),
             const SizedBox(height: 16),
             TextFormField(
@@ -695,9 +711,6 @@ class _AddPlayerScreenState extends ConsumerState<AddPlayerScreen> {
 
   // Step 1 — Map columns
   Widget _buildCsvStep1Map() {
-    final emailMapped = _columnMappings
-        .any((m) => m.mappedField == SquadSyncField.email);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -716,22 +729,16 @@ class _AddPlayerScreenState extends ConsumerState<AddPlayerScreen> {
                     TextStyle(fontSize: 13, color: Colors.grey[600]),
               ),
               const SizedBox(height: 12),
-              // Email required indicator
               Row(
                 children: [
-                  Icon(
-                    emailMapped
-                        ? Icons.check_circle
-                        : Icons.error_outline,
-                    size: 16,
-                    color: emailMapped ? Colors.green : Colors.red,
-                  ),
+                  const Icon(Icons.check_circle,
+                      size: 16, color: Colors.green),
                   const SizedBox(width: 6),
-                  Text(
-                    emailMapped ? 'email ✓' : 'email required',
+                  const Text(
+                    'Full name required · Email optional',
                     style: TextStyle(
                       fontSize: 13,
-                      color: emailMapped ? Colors.green : Colors.red,
+                      color: Colors.green,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -807,7 +814,7 @@ class _AddPlayerScreenState extends ConsumerState<AddPlayerScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: emailMapped ? () => _csvGoTo(2) : null,
+                  onPressed: () => _csvGoTo(2),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
@@ -871,7 +878,7 @@ class _AddPlayerScreenState extends ConsumerState<AddPlayerScreen> {
                         case SquadSyncField.lastName:
                           v = player.lastName ?? '';
                         case SquadSyncField.email:
-                          v = player.email;
+                          v = player.email ?? '';
                         case SquadSyncField.phone:
                           v = player.phone ?? '';
                         case SquadSyncField.position:
@@ -880,6 +887,12 @@ class _AddPlayerScreenState extends ConsumerState<AddPlayerScreen> {
                           v = player.jerseyNumber?.toString() ?? '';
                         case SquadSyncField.dateOfBirth:
                           v = player.dateOfBirth ?? '';
+                        case SquadSyncField.division:
+                          v = player.division ?? '';
+                        case SquadSyncField.team:
+                          v = player.team ?? '';
+                        case SquadSyncField.fullName:
+                          v = player.fullNameOverride ?? '';
                         case SquadSyncField.ignore:
                           v = '';
                       }
@@ -1019,6 +1032,12 @@ class _AddPlayerScreenState extends ConsumerState<AddPlayerScreen> {
               Colors.amber[900]!),
           const SizedBox(height: 8),
           _buildResultCard(
+              '${result.pendingCount} join codes',
+              'No email — join with 8-char code',
+              AppColors.accentSurface,
+              AppColors.primary),
+          const SizedBox(height: 8),
+          _buildResultCard(
               '${result.skippedCount} skipped',
               'Already a member or invalid row',
               Colors.grey[200]!,
@@ -1041,6 +1060,79 @@ class _AddPlayerScreenState extends ConsumerState<AddPlayerScreen> {
                   .toList(),
             ),
           ],
+          // Join codes section
+          if (result.playersWithCodes.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.accentSurface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Join codes for players without email',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Share these codes so players can join using the app.',
+                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 12),
+                  ...result.playersWithCodes.map((p) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(p.name,
+                              style: const TextStyle(fontSize: 14)),
+                        ),
+                        Text(
+                          p.joinCode,
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.accent,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () {
+                            // copy individual code
+                          },
+                          child: const Icon(Icons.copy_outlined,
+                              size: 16, color: AppColors.accent),
+                        ),
+                      ],
+                    ),
+                  )),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.share_outlined),
+                      label: const Text('Share all codes'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        side: const BorderSide(color: AppColors.primary),
+                      ),
+                      onPressed: () => _shareJoinCodes(result.playersWithCodes),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 24),
           ElevatedButton(
             onPressed: () => context.pop(),
@@ -1061,6 +1153,15 @@ class _AddPlayerScreenState extends ConsumerState<AddPlayerScreen> {
     );
   }
 
+  Future<void> _shareJoinCodes(
+      List<({String name, String joinCode})> players) async {
+    final buffer = StringBuffer('SquadSync Join Codes\n\n');
+    for (final p in players) {
+      buffer.writeln('${p.name}: ${p.joinCode}');
+    }
+    await Share.share(buffer.toString(), subject: 'SquadSync Join Codes');
+  }
+
   Widget _buildResultCard(
     String count,
     String label,
@@ -1079,8 +1180,437 @@ class _AddPlayerScreenState extends ConsumerState<AddPlayerScreen> {
               style: TextStyle(
                   fontWeight: FontWeight.bold, fontSize: 16, color: fg)),
           const SizedBox(width: 12),
-          Text(label,
-              style: TextStyle(fontSize: 13, color: fg)),
+          Text(label, style: TextStyle(fontSize: 13, color: fg)),
+        ],
+      ),
+    );
+  }
+
+  // ── Tab 4 — Photo import ──────────────────────────────────────
+
+  Widget _buildPhotoTab() {
+    return StatefulBuilder(
+      builder: (context, setTabState) {
+        if (_photoStep == 0) {
+          return _buildPhotoStep0(setTabState);
+        }
+        if (_photoStep == 1) {
+          return const Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: AppColors.accent),
+                SizedBox(height: 16),
+                Text('Reading team sheet…',
+                    style: TextStyle(color: AppColors.textSecondary)),
+              ],
+            ),
+          );
+        }
+        if (_photoStep == 2) {
+          return _buildPhotoStep2Review(setTabState);
+        }
+        return _buildPhotoStep3Results();
+      },
+    );
+  }
+
+  Widget _buildPhotoStep0(StateSetter setTabState) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 16),
+          const Icon(Icons.camera_alt_outlined,
+              size: 64, color: AppColors.textHint),
+          const SizedBox(height: 16),
+          const Text(
+            'Photo import',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Photograph a team sheet and we\'ll extract the player names automatically.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+          ),
+          if (_photoError != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.inactiveSurface,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(_photoError!,
+                  style: const TextStyle(color: AppColors.error)),
+            ),
+          ],
+          const SizedBox(height: 32),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.camera_alt),
+            label: const Text('Take photo'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              minimumSize: const Size.fromHeight(48),
+            ),
+            onPressed: _photoLoading
+                ? null
+                : () => _capturePhoto(
+                    ImageSource.camera, setTabState),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.photo_library_outlined),
+            label: const Text('Choose from library'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              minimumSize: const Size.fromHeight(48),
+            ),
+            onPressed: _photoLoading
+                ? null
+                : () => _capturePhoto(
+                    ImageSource.gallery, setTabState),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _capturePhoto(
+      ImageSource source, StateSetter setTabState) async {
+    final apiKey = AppConfig.anthropicApiKey;
+    if (apiKey.isEmpty) {
+      setTabState(() =>
+          _photoError = 'ANTHROPIC_API_KEY not set in .env');
+      setState(() => _photoError = 'ANTHROPIC_API_KEY not set in .env');
+      return;
+    }
+
+    final picker = ImagePicker();
+    final image = await picker.pickImage(
+      source: source,
+      imageQuality: 80,
+      maxWidth: 1920,
+    );
+    if (image == null) return;
+
+    setState(() {
+      _photoStep = 1;
+      _photoLoading = true;
+      _photoError = null;
+    });
+
+    try {
+      final bytes = await image.readAsBytes();
+      final base64Image = base64Encode(bytes);
+
+      final response = await http.post(
+        Uri.parse('https://api.anthropic.com/v1/messages'),
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: jsonEncode({
+          'model': 'claude-opus-4-6',
+          'max_tokens': 1024,
+          'messages': [
+            {
+              'role': 'user',
+              'content': [
+                {
+                  'type': 'image',
+                  'source': {
+                    'type': 'base64',
+                    'media_type': 'image/jpeg',
+                    'data': base64Image,
+                  },
+                },
+                {
+                  'type': 'text',
+                  'text': '''Extract all team names and player names from this image.
+
+Return ONLY valid JSON in this exact format, no other text:
+{
+  "teams": [
+    {
+      "name": "Team name here",
+      "division": "Division name if visible or null",
+      "players": [
+        "Player Name 1",
+        "Player Name 2"
+      ]
+    }
+  ]
+}
+
+Rules:
+- Include ALL player names visible
+- Team name is usually a header
+- Division is often part of team name like "A Grade"
+- If only a list of names with no team header, use "Team 1" as name''',
+                },
+              ],
+            }
+          ],
+        }),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('API error ${response.statusCode}: ${response.body}');
+      }
+
+      final responseData =
+          jsonDecode(response.body) as Map<String, dynamic>;
+      final content =
+          (responseData['content'] as List).first as Map<String, dynamic>;
+      final text = content['text'] as String;
+
+      // Extract JSON from response
+      final jsonStart = text.indexOf('{');
+      final jsonEnd = text.lastIndexOf('}');
+      if (jsonStart == -1 || jsonEnd == -1) {
+        throw Exception('No valid JSON in response');
+      }
+      final jsonStr = text.substring(jsonStart, jsonEnd + 1);
+      final parsed = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final teamsJson = parsed['teams'] as List;
+
+      final teams = teamsJson.map((t) {
+        final tm = t as Map<String, dynamic>;
+        return _PhotoTeam(
+          name: tm['name'] as String? ?? 'Team',
+          division: tm['division'] as String?,
+          players: (tm['players'] as List).cast<String>(),
+        );
+      }).toList();
+
+      setState(() {
+        _photoTeams = teams;
+        _photoStep = 2;
+        _photoLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _photoStep = 0;
+        _photoLoading = false;
+        _photoError = 'Failed to read team sheet: $e';
+      });
+    }
+  }
+
+  Widget _buildPhotoStep2Review(StateSetter setTabState) {
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Review extracted data',
+                    style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                const Text(
+                  'Edit names or teams before importing.',
+                  style: TextStyle(
+                      fontSize: 13, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 16),
+                ..._photoTeams.map((team) => _buildPhotoTeamCard(
+                    team, setTabState)),
+              ],
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              minimumSize: const Size.fromHeight(48),
+            ),
+            onPressed: () => _importPhotoPlayers(),
+            child: Text(
+              'Import ${_photoTeams.where((t) => t.include).fold(0, (sum, t) => sum + t.players.length)} players',
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPhotoTeamCard(_PhotoTeam team, StateSetter setTabState) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CheckboxListTile(
+            value: team.include,
+            onChanged: (v) => setTabState(() => team.include = v ?? true),
+            title: Text(team.name,
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: team.division != null ? Text(team.division!) : null,
+            activeColor: AppColors.primary,
+            controlAffinity: ListTileControlAffinity.leading,
+          ),
+          if (team.include)
+            ...team.players.asMap().entries.map((entry) => Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.person_outline,
+                          size: 16, color: AppColors.textHint),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextFormField(
+                          initialValue: entry.value,
+                          style: const TextStyle(fontSize: 14),
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            border: InputBorder.none,
+                          ),
+                          onChanged: (v) =>
+                              team.players[entry.key] = v,
+                        ),
+                      ),
+                    ],
+                  ),
+                )),
+          if (team.include) const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _importPhotoPlayers() async {
+    final teamId = widget.teamId;
+    if (teamId == null) return;
+
+    final rows = <PlayerImportRow>[];
+    for (final team in _photoTeams.where((t) => t.include)) {
+      for (final name in team.players.where((p) => p.trim().isNotEmpty)) {
+        rows.add(PlayerImportRow(
+          fullNameOverride: name.trim(),
+          division: team.division ?? team.name,
+          team: team.name,
+        ));
+      }
+    }
+
+    if (rows.isEmpty) return;
+
+    setState(() => _photoLoading = true);
+
+    try {
+      final result = await ref
+          .read(addPlayerNotifierProvider.notifier)
+          .importPlayers(teamId: teamId, players: rows);
+      if (!mounted) return;
+      setState(() {
+        _photoImportResult = result;
+        _photoStep = 3;
+        _photoLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _photoLoading = false);
+      _showSnackBar('Import failed: $e');
+    }
+  }
+
+  Widget _buildPhotoStep3Results() {
+    final result = _photoImportResult;
+    if (result == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Icon(Icons.check_circle, color: Colors.green, size: 64),
+          const SizedBox(height: 16),
+          const Text(
+            'Import complete!',
+            textAlign: TextAlign.center,
+            style:
+                TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 24),
+          _buildResultCard(
+              '${result.pendingCount} join codes',
+              'Players added — share codes to join',
+              AppColors.accentSurface,
+              AppColors.primary),
+          if (result.playersWithCodes.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Text('Join codes',
+                style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            ...result.playersWithCodes.map((p) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Expanded(child: Text(p.name)),
+                      Text(
+                        p.joinCode,
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.accent,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                )),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.share_outlined),
+              label: const Text('Share codes'),
+              onPressed: () =>
+                  _shareJoinCodes(result.playersWithCodes),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                side: const BorderSide(color: AppColors.primary),
+              ),
+            ),
+          ],
+          const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: () => context.pop(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              minimumSize: const Size.fromHeight(48),
+            ),
+            child: const Text('View roster'),
+          ),
+          const SizedBox(height: 12),
+          TextButton(
+            onPressed: () => setState(() {
+              _photoStep = 0;
+              _photoTeams = [];
+              _photoImportResult = null;
+              _photoError = null;
+            }),
+            child: const Text('Import another'),
+          ),
         ],
       ),
     );

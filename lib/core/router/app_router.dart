@@ -26,6 +26,7 @@ import 'package:squadsync/features/profile/screens/guardian_requests_screen.dart
 import 'package:squadsync/features/profile/screens/profile_screen.dart';
 import 'package:squadsync/features/roster/screens/add_guardian_screen.dart';
 import 'package:squadsync/features/roster/screens/add_player_screen.dart';
+import 'package:squadsync/features/roster/screens/divisions_screen.dart';
 import 'package:squadsync/features/roster/screens/player_profile_screen.dart';
 import 'package:squadsync/features/roster/screens/roster_list_screen.dart';
 import 'package:squadsync/shared/widgets/bottom_nav_shell.dart';
@@ -35,7 +36,6 @@ part 'app_router.g.dart';
 // ── Route argument types ─────────────────────────────────────
 
 /// Arguments for the /roster/player/:id route.
-/// [id] is the profileId for real players, or the pendingPlayerId for pending.
 class PlayerProfileArgs {
   const PlayerProfileArgs({
     required this.id,
@@ -94,11 +94,10 @@ const String kRequestFillInRoute = '/fill-in/request';
 const String kRespondFillInRoute = '/fill-in/respond/:id';
 const String kChatRoute = '/chat/:teamId';
 const String kWelcomeRoute = '/welcome';
+const String kDivisionsRoute = '/club/divisions';
 
 // ── Auth-aware ChangeNotifier for GoRouter refreshListenable ─
 
-/// Tracks the current [Session] and the user's [clubId] so GoRouter can
-/// redirect without any async work inside the redirect callback.
 class _AuthChangeNotifier extends ChangeNotifier {
   _AuthChangeNotifier() {
     _session = supabase.auth.currentSession;
@@ -164,22 +163,18 @@ GoRouter appRouter(AppRouterRef ref) {
           uri == kSignUpRoute ||
           uri == kForgotPasswordRoute;
 
-      // Welcome screen requires a session — allow through if authed
       if (uri == kWelcomeRoute) {
         return session == null ? kSignInRoute : null;
       }
 
-      // No session → force to sign-in (unless already on an auth route)
       if (session == null) {
         return isAuthRoute ? null : kSignInRoute;
       }
 
-      // Has session → redirect away from auth routes
       if (isAuthRoute) {
         return notifier.clubId == null ? kOnboardingRoute : kHomeRoute;
       }
 
-      // Has session + club → skip onboarding if already done
       if (uri == kOnboardingRoute && notifier.clubId != null) {
         return kHomeRoute;
       }
@@ -228,6 +223,10 @@ GoRouter appRouter(AppRouterRef ref) {
         builder: (context, state) => RespondFillInScreen(
           requestId: state.pathParameters['id']!,
         ),
+      ),
+      GoRoute(
+        path: kDivisionsRoute,
+        builder: (context, state) => const DivisionsScreen(),
       ),
       GoRoute(
         path: kSignInRoute,
@@ -340,4 +339,3 @@ GoRouter appRouter(AppRouterRef ref) {
     ],
   );
 }
-
