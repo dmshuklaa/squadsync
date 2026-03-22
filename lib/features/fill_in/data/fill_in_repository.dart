@@ -49,51 +49,93 @@ class FillInRepository {
     await supabase.from('fill_in_rules').delete().eq('id', ruleId);
   }
 
+  Future<void> updateFillInMode({
+    required String clubId,
+    required String mode,
+  }) async {
+    await supabase
+        .from('clubs')
+        .update({'fill_in_mode': mode})
+        .eq('id', clubId);
+  }
+
   Future<List<Profile>> getEligiblePlayers({
     required String clubId,
     required String targetDivisionId,
     required String eventId,
   }) async {
-    // Step 1: source division IDs from enabled fill-in rules
-    final rulesResponse = await supabase
-        .from('fill_in_rules')
-        .select('source_division_id')
-        .eq('target_division_id', targetDivisionId)
-        .eq('club_id', clubId)
-        .eq('enabled', true);
+    // Check the club's fill-in mode
+    final clubData = await supabase
+        .from('clubs')
+        .select('fill_in_mode')
+        .eq('id', clubId)
+        .maybeSingle();
+    final isOpenMode = (clubData?['fill_in_mode'] as String?) == 'open';
 
-    final sourceDivisionIds = (rulesResponse as List)
-        .map((r) => r['source_division_id'] as String)
-        .toList();
+    Set<String> allCandidateIds;
 
-    if (sourceDivisionIds.isEmpty) return [];
+    if (isOpenMode) {
+      // Open mode: all active members across all club teams are eligible
+      final teamsResponse = await supabase
+          .from('teams')
+          .select('id, divisions!inner(club_id)')
+          .eq('divisions.club_id', clubId);
 
-    // Step 2: team IDs in those source divisions
-    final teamsResponse = await supabase
-        .from('teams')
-        .select('id')
-        .inFilter('division_id', sourceDivisionIds);
+      final teamIds = (teamsResponse as List)
+          .map((t) => t['id'] as String)
+          .toList();
 
-    final teamIds = (teamsResponse as List)
-        .map((t) => t['id'] as String)
-        .toList();
+      if (teamIds.isEmpty) return [];
 
-    if (teamIds.isEmpty) return [];
+      final membersResponse = await supabase
+          .from('team_memberships')
+          .select('profile_id')
+          .inFilter('team_id', teamIds)
+          .eq('status', 'active');
 
-    // Step 3: active player IDs in those teams
-    final membersResponse = await supabase
-        .from('team_memberships')
-        .select('profile_id')
-        .inFilter('team_id', teamIds)
-        .eq('status', 'active');
+      allCandidateIds = (membersResponse as List)
+          .map((r) => r['profile_id'] as String)
+          .toSet();
+    } else {
+      // Restricted mode: source division IDs from enabled fill-in rules
+      final rulesResponse = await supabase
+          .from('fill_in_rules')
+          .select('source_division_id')
+          .eq('target_division_id', targetDivisionId)
+          .eq('club_id', clubId)
+          .eq('enabled', true);
 
-    final allCandidateIds = (membersResponse as List)
-        .map((r) => r['profile_id'] as String)
-        .toSet();
+      final sourceDivisionIds = (rulesResponse as List)
+          .map((r) => r['source_division_id'] as String)
+          .toList();
+
+      if (sourceDivisionIds.isEmpty) return [];
+
+      final teamsResponse = await supabase
+          .from('teams')
+          .select('id')
+          .inFilter('division_id', sourceDivisionIds);
+
+      final teamIds = (teamsResponse as List)
+          .map((t) => t['id'] as String)
+          .toList();
+
+      if (teamIds.isEmpty) return [];
+
+      final membersResponse = await supabase
+          .from('team_memberships')
+          .select('profile_id')
+          .inFilter('team_id', teamIds)
+          .eq('status', 'active');
+
+      allCandidateIds = (membersResponse as List)
+          .map((r) => r['profile_id'] as String)
+          .toSet();
+    }
 
     if (allCandidateIds.isEmpty) return [];
 
-    // Step 4: already-rostered player IDs for this event
+    // Already-rostered player IDs for this event
     final rosterResponse = await supabase
         .from('event_roster')
         .select('profile_id')
@@ -102,7 +144,7 @@ class FillInRepository {
         .map((r) => r['profile_id'] as String)
         .toSet();
 
-    // Step 5: players with a pending fill-in request for this event
+    // Players with a pending fill-in request for this event
     final pendingResponse = await supabase
         .from('fill_in_requests')
         .select('player_id')
@@ -112,7 +154,7 @@ class FillInRepository {
         .map((r) => r['player_id'] as String)
         .toSet();
 
-    // Step 6: filter out rostered/pending, then fetch available profiles
+    // Filter out rostered/pending, then fetch available profiles
     final eligibleIds = allCandidateIds
         .where((id) => !rosteredIds.contains(id) && !pendingIds.contains(id))
         .toList();
@@ -125,11 +167,9 @@ class FillInRepository {
         .inFilter('id', eligibleIds)
         .eq('availability_this_week', true);
 
-    final result = (profilesResponse as List)
+    return (profilesResponse as List)
         .map((row) => Profile.fromJson(row as Map<String, dynamic>))
         .toList();
-
-    return result;
   }
 
   Future<int> getFillInCountThisSeason(
@@ -227,6 +267,14 @@ class FillInRepository {
         'is_fill_in': true,
       }, onConflict: 'event_id,profile_id');
 
+      // Auto-RSVP the fill-in player as going
+      await supabase.from('event_rsvps').upsert({
+        'event_id': eventId,
+        'profile_id': playerId,
+        'status': 'going',
+        'responded_at': DateTime.now().toIso8601String(),
+      }, onConflict: 'event_id,profile_id');
+
       // Insert fill_in_log
       if (homeDivisionId != null) {
         final eventData = await supabase
@@ -270,6 +318,19 @@ class FillInRepository {
           );
         } catch (_) {}
       }
+    }
+
+    if (status == FillInRequestStatus.declined) {
+      final eventId = requestData['event_id'] as String;
+      final playerId = requestData['player_id'] as String;
+
+      // Auto-RSVP the declined fill-in player as not going
+      await supabase.from('event_rsvps').upsert({
+        'event_id': eventId,
+        'profile_id': playerId,
+        'status': 'not_going',
+        'responded_at': DateTime.now().toIso8601String(),
+      }, onConflict: 'event_id,profile_id');
     }
   }
 

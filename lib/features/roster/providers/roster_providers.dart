@@ -86,3 +86,11 @@ Future<List<Division>> clubDivisions(ClubDivisionsRef ref) async {
   final repo = ref.watch(rosterRepositoryProvider);
   return repo.getDivisionsForClub(profile.clubId!);
 }
+
+// ── Active member count for club ─────────────────────────────
+
+@riverpod
+Future<int> memberCount(MemberCountRef ref, String clubId) async {
+  final repo = ref.watch(rosterRepositoryProvider);
+  return repo.getActiveMemberCount(clubId);
+}

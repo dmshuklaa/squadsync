@@ -8,6 +8,7 @@ class EventRosterEntry {
     required this.addedAt,
     this.profileFullName,
     this.profileAvatarUrl,
+    this.selectionStatus = 'selected',
   });
 
   final String id;
@@ -20,6 +21,11 @@ class EventRosterEntry {
   final DateTime addedAt;
   final String? profileFullName;
   final String? profileAvatarUrl;
+  final String selectionStatus;
+
+  bool get isSelected => selectionStatus == 'selected';
+  bool get isReserve => selectionStatus == 'reserve';
+  bool get isUnavailable => selectionStatus == 'unavailable';
 
   factory EventRosterEntry.fromJson(Map<String, dynamic> json) {
     final profile = json['profiles'] as Map<String, dynamic>?;
@@ -32,6 +38,7 @@ class EventRosterEntry {
       addedAt: DateTime.parse(json['created_at'] as String),
       profileFullName: profile?['full_name'] as String?,
       profileAvatarUrl: profile?['avatar_url'] as String?,
+      selectionStatus: json['selection_status'] as String? ?? 'selected',
     );
   }
 
@@ -42,6 +49,7 @@ class EventRosterEntry {
         'is_fill_in': isFillIn,
         'home_division_id': homeDivisionId,
         'added_at': addedAt.toIso8601String(),
+        'selection_status': selectionStatus,
       };
 
   EventRosterEntry copyWith({
@@ -53,6 +61,7 @@ class EventRosterEntry {
     DateTime? addedAt,
     String? profileFullName,
     String? profileAvatarUrl,
+    String? selectionStatus,
   }) =>
       EventRosterEntry(
         id: id ?? this.id,
@@ -63,5 +72,6 @@ class EventRosterEntry {
         addedAt: addedAt ?? this.addedAt,
         profileFullName: profileFullName ?? this.profileFullName,
         profileAvatarUrl: profileAvatarUrl ?? this.profileAvatarUrl,
+        selectionStatus: selectionStatus ?? this.selectionStatus,
       );
 }

@@ -37,7 +37,15 @@ class HomeScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: CustomScrollView(
+      body: RefreshIndicator(
+        color: AppColors.accent,
+        onRefresh: () async {
+          ref.invalidate(upcomingEventsProvider);
+          ref.invalidate(userTeamsProvider);
+          ref.invalidate(currentProfileProvider);
+          await ref.read(upcomingEventsProvider.future);
+        },
+        child: CustomScrollView(
         slivers: [
           // ── Navy curved header ─────────────────────────────
           SliverToBoxAdapter(
@@ -72,6 +80,14 @@ class HomeScreen extends ConsumerWidget {
                   const SizedBox(width: 8),
                   const Text('Upcoming events', style: AppTextStyles.h3),
                   const Spacer(),
+                  TextButton(
+                    onPressed: () => context.push(kEventListRoute),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.accent,
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                    ),
+                    child: const Text('See all'),
+                  ),
                   if (canManage)
                     IconButton(
                       icon: const Icon(
@@ -127,6 +143,7 @@ class HomeScreen extends ConsumerWidget {
             },
           ),
         ],
+        ),
       ),
     );
   }

@@ -3,12 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:squadsync/core/router/app_router.dart';
+import 'package:squadsync/core/supabase/supabase_client.dart';
 import 'package:squadsync/core/theme/app_theme.dart';
 import 'package:squadsync/features/auth/providers/auth_provider.dart';
+import 'package:squadsync/features/fill_in/providers/fill_in_providers.dart';
 import 'package:squadsync/features/roster/providers/guardian_provider.dart';
 import 'package:squadsync/features/roster/providers/roster_providers.dart';
 import 'package:squadsync/shared/models/enums.dart';
 import 'package:squadsync/shared/models/profile.dart';
+import 'package:squadsync/shared/models/team.dart';
 import 'package:squadsync/shared/widgets/avatar_widget.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -30,10 +33,168 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
+  Future<void> _showEditProfileSheet(Profile profile) async {
+    final nameController = TextEditingController(text: profile.fullName);
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          20,
+          20,
+          MediaQuery.of(ctx).viewInsets.bottom + 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Edit profile', style: AppTextStyles.h3),
+            const SizedBox(height: 20),
+            TextField(
+              controller: nameController,
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Full name',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: AppColors.primary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text(
+                  'Save',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed == true && nameController.text.trim().isNotEmpty) {
+      try {
+        await supabase
+            .from('profiles')
+            .update({'full_name': nameController.text.trim()})
+            .eq('id', profile.id);
+        ref.invalidate(currentProfileProvider);
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update name: $e')),
+        );
+      }
+    }
+    nameController.dispose();
+  }
+
+  Future<void> _showSquadSettingsSheet(Team team) async {
+    int squadSize = team.squadSize ?? 0;
+    int playingXi = team.playingXiSize ?? 0;
+
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            20,
+            20,
+            MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Squad settings — ${team.name}',
+                  style: AppTextStyles.h3),
+              const SizedBox(height: 20),
+              _CounterRow(
+                label: 'Squad size',
+                value: squadSize,
+                onDecrement: squadSize > 0
+                    ? () => setModalState(() => squadSize--)
+                    : null,
+                onIncrement: () => setModalState(() => squadSize++),
+              ),
+              const SizedBox(height: 16),
+              _CounterRow(
+                label: 'Playing XI / Starting lineup',
+                value: playingXi,
+                onDecrement: playingXi > 0
+                    ? () => setModalState(() => playingXi--)
+                    : null,
+                onIncrement: () => setModalState(() => playingXi++),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.accent,
+                    foregroundColor: AppColors.primary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () => Navigator.of(ctx).pop(true),
+                  child: const Text(
+                    'Save',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await ref
+            .read(rosterRepositoryProvider)
+            .updateTeamSquadSize(
+              teamId: team.id,
+              squadSize: squadSize > 0 ? squadSize : null,
+              playingXiSize: playingXi > 0 ? playingXi : null,
+            );
+        ref.invalidate(userTeamsProvider);
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save settings: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isLoading = ref.watch(authNotifierProvider).isLoading;
-    // ── Source of truth: live DB profile ─────────────────────
     final profileAsync = ref.watch(currentProfileProvider);
     final requestsAsync = ref.watch(pendingGuardianRequestsProvider);
     final pendingCount =
@@ -49,7 +210,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           child: Text('Error loading profile: $e',
               style: AppTextStyles.bodySmall),
         ),
-        data: (profile) => _buildBody(context, profile, pendingCount, isLoading),
+        data: (profile) =>
+            _buildBody(context, profile, pendingCount, isLoading),
       ),
     );
   }
@@ -62,6 +224,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   ) {
     final roleLabel = _formatRole(profile.role);
     final isAdmin = profile.role == UserRole.clubAdmin;
+    final teamsAsync = ref.watch(userTeamsProvider);
+    final memberCountAsync = profile.clubId != null
+        ? ref.watch(memberCountProvider(profile.clubId!))
+        : null;
 
     return SingleChildScrollView(
       child: Column(
@@ -78,47 +244,63 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
             child: SafeArea(
               bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 32, 16, 28),
-                child: Column(
-                  children: [
-                    AvatarWidget(
-                      fullName: profile.fullName,
-                      avatarUrl: profile.avatarUrl,
-                      size: 80,
-                      showRing: true,
-                    ),
-                    const SizedBox(height: 14),
-                    Text(
-                      profile.fullName,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.accent.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                            color: AppColors.accent.withValues(alpha: 0.5)),
-                      ),
-                      child: Text(
-                        roleLabel,
-                        style: const TextStyle(
-                          color: AppColors.accentLight,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+              child: Stack(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 32, 16, 28),
+                    child: Column(
+                      children: [
+                        AvatarWidget(
+                          fullName: profile.fullName,
+                          avatarUrl: profile.avatarUrl,
+                          size: 80,
+                          showRing: true,
                         ),
-                      ),
+                        const SizedBox(height: 14),
+                        Text(
+                          profile.fullName,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.accent.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                                color:
+                                    AppColors.accent.withValues(alpha: 0.5)),
+                          ),
+                          child: Text(
+                            roleLabel,
+                            style: const TextStyle(
+                              color: AppColors.accentLight,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                  // Edit button in top-right corner of banner
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: IconButton(
+                      icon: const Icon(Icons.edit_outlined,
+                          color: Colors.white70, size: 20),
+                      onPressed: () => _showEditProfileSheet(profile),
+                      tooltip: 'Edit name',
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -190,6 +372,71 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
           const SizedBox(height: 12),
 
+          // ── Club section (admin only) ────────────────────────
+          if (isAdmin && profile.clubId != null) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Card(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _sectionHeader('CLUB SETTINGS'),
+                    ListTile(
+                      leading: const Icon(Icons.sports_outlined,
+                          color: AppColors.accent),
+                      title: const Text('Sport type'),
+                      subtitle: ref
+                          .watch(clubProvider(profile.clubId!))
+                          .when(
+                            loading: () => const Text('Loading…'),
+                            error: (e, _) => const Text('—'),
+                            data: (club) => Text(club?.sportType ?? '—'),
+                          ),
+                    ),
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    ListTile(
+                      leading: const Icon(Icons.group_outlined,
+                          color: AppColors.accent),
+                      title: const Text('Active members'),
+                      subtitle: memberCountAsync == null
+                          ? const Text('—')
+                          : memberCountAsync.when(
+                              loading: () => const Text('Loading…'),
+                              error: (e, _) => const Text('—'),
+                              data: (count) =>
+                                  Text('$count member${count == 1 ? '' : 's'}'),
+                            ),
+                    ),
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    teamsAsync.when(
+                      loading: () => const SizedBox.shrink(),
+                      error: (e, _) => const SizedBox.shrink(),
+                      data: (teams) => teams.isEmpty
+                          ? const SizedBox.shrink()
+                          : ListTile(
+                              leading: const Icon(Icons.tune_outlined,
+                                  color: AppColors.accent),
+                              title: const Text('Squad settings'),
+                              subtitle: Text(
+                                teams.length == 1
+                                    ? teams.first.name
+                                    : '${teams.length} teams',
+                              ),
+                              trailing: const Icon(Icons.chevron_right,
+                                  color: AppColors.textHint),
+                              onTap: () => teams.length == 1
+                                  ? _showSquadSettingsSheet(teams.first)
+                                  : _showTeamPickerForSquadSettings(
+                                      context, teams),
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+
           // ── Actions section ──────────────────────────────────
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -221,7 +468,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         : null,
                     onTap: () => context.push(kGuardianRequestsRoute),
                   ),
-                  // Club Settings — only club_admin (from DB, not JWT)
                   if (isAdmin) ...[
                     const Divider(height: 1, indent: 16, endIndent: 16),
                     ListTile(
@@ -246,7 +492,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ? const SizedBox(
                             width: 20,
                             height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child:
+                                CircularProgressIndicator(strokeWidth: 2),
                           )
                         : null,
                   ),
@@ -257,6 +504,41 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
           const SizedBox(height: 32),
         ],
+      ),
+    );
+  }
+
+  void _showTeamPickerForSquadSettings(
+      BuildContext context, List<Team> teams) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: const Text('Select team', style: AppTextStyles.h3),
+            ),
+            ...teams.map(
+              (team) => ListTile(
+                title: Text(team.name),
+                subtitle: team.divisionName != null
+                    ? Text(team.divisionName!)
+                    : null,
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _showSquadSettingsSheet(team);
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
@@ -292,5 +574,49 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       case UserRole.parent:
         return 'Parent';
     }
+  }
+}
+
+// ── Counter row for squad settings ───────────────────────────
+
+class _CounterRow extends StatelessWidget {
+  const _CounterRow({
+    required this.label,
+    required this.value,
+    required this.onIncrement,
+    this.onDecrement,
+  });
+
+  final String label;
+  final int value;
+  final VoidCallback onIncrement;
+  final VoidCallback? onDecrement;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(label, style: AppTextStyles.body),
+        ),
+        IconButton(
+          icon: const Icon(Icons.remove_circle_outline,
+              color: AppColors.accent),
+          onPressed: onDecrement,
+        ),
+        SizedBox(
+          width: 36,
+          child: Text(
+            value == 0 ? '—' : '$value',
+            style: AppTextStyles.h3.copyWith(color: AppColors.primary),
+            textAlign: TextAlign.center,
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.add_circle_outline, color: AppColors.accent),
+          onPressed: onIncrement,
+        ),
+      ],
+    );
   }
 }

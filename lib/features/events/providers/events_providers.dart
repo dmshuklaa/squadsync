@@ -104,6 +104,43 @@ Future<List<EventRosterEntry>> eventRoster(
   return repo.getEventRoster(eventId);
 }
 
+// ── Current user's event roster entry ────────────────────────
+
+@riverpod
+Future<EventRosterEntry?> myEventRosterEntry(
+  MyEventRosterEntryRef ref, {
+  required String eventId,
+  required String profileId,
+}) async {
+  final repo = ref.watch(eventsRepositoryProvider);
+  return repo.getMyEventRosterEntry(eventId: eventId, profileId: profileId);
+}
+
+// ── Selection status mutation notifier ───────────────────────
+
+@riverpod
+class SelectionStatusNotifier extends _$SelectionStatusNotifier {
+  @override
+  FutureOr<void> build() {}
+
+  Future<void> updateStatus({
+    required String entryId,
+    required String status,
+    required String eventId,
+  }) async {
+    state = const AsyncLoading();
+    try {
+      final repo = ref.read(eventsRepositoryProvider);
+      await repo.updateSelectionStatus(eventRosterId: entryId, status: status);
+      ref.invalidate(eventRosterProvider(eventId));
+      state = const AsyncData(null);
+    } catch (e, st) {
+      state = AsyncError(e, st);
+      rethrow;
+    }
+  }
+}
+
 // ── RSVP mutation notifier ────────────────────────────────────
 
 @riverpod

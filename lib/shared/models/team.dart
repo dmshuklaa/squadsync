@@ -7,6 +7,8 @@ class Team {
     required this.createdAt,
     // Joined from divisions — only present when fetched with a divisions join
     this.divisionName,
+    this.squadSize,
+    this.playingXiSize,
   });
 
   final String id;
@@ -17,6 +19,10 @@ class Team {
 
   // Joined division field
   final String? divisionName;
+
+  // Squad size settings (Sprint 5)
+  final int? squadSize;
+  final int? playingXiSize;
 
   factory Team.fromJson(Map<String, dynamic> json) {
     return Team(
@@ -29,6 +35,8 @@ class Team {
           : DateTime.now(),
       divisionName:
           (json['divisions'] as Map<String, dynamic>?)?['name'] as String?,
+      squadSize: json['squad_size'] as int?,
+      playingXiSize: json['playing_xi_size'] as int?,
     );
   }
 
@@ -49,6 +57,8 @@ class Team {
     String? season,
     DateTime? createdAt,
     String? divisionName,
+    int? squadSize,
+    int? playingXiSize,
   }) {
     return Team(
       id: id ?? this.id,
@@ -57,6 +67,8 @@ class Team {
       season: season ?? this.season,
       createdAt: createdAt ?? this.createdAt,
       divisionName: divisionName ?? this.divisionName,
+      squadSize: squadSize ?? this.squadSize,
+      playingXiSize: playingXiSize ?? this.playingXiSize,
     );
   }
 }

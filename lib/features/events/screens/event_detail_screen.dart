@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import 'package:squadsync/core/router/app_router.dart';
+import 'package:squadsync/core/supabase/supabase_client.dart';
 import 'package:squadsync/core/theme/app_theme.dart';
 import 'package:squadsync/features/events/providers/events_providers.dart';
 import 'package:squadsync/features/roster/providers/roster_providers.dart';
@@ -23,6 +24,14 @@ class EventDetailScreen extends ConsumerWidget {
     final myRsvpAsync = ref.watch(myRsvpProvider(eventId));
     final rsvpCountsAsync = ref.watch(rsvpCountsProvider(eventId));
     final rosterAsync = ref.watch(eventRosterProvider(eventId));
+    final profileAsync = ref.watch(currentProfileProvider);
+    final myProfileId = profileAsync.whenOrNull(data: (p) => p.id);
+    final myRosterEntryAsync = myProfileId != null
+        ? ref.watch(myEventRosterEntryProvider(
+            eventId: eventId, profileId: myProfileId))
+        : null;
+    final isFillIn =
+        myRosterEntryAsync?.whenOrNull(data: (e) => e?.isFillIn) == true;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -69,7 +78,7 @@ class EventDetailScreen extends ConsumerWidget {
                     children: [
                       // ── RSVP section ─────────────────────
                       _buildRsvpSection(
-                          context, ref, myRsvp, counts),
+                          context, ref, myRsvp, counts, isFillIn),
                       const SizedBox(height: 16),
 
                       // ── Roster section ────────────────────
@@ -187,7 +196,54 @@ class EventDetailScreen extends ConsumerWidget {
     WidgetRef ref,
     RsvpStatus? myRsvp,
     Map<RsvpStatus, int> counts,
+    bool isFillIn,
   ) {
+    final currentUserId = supabase.auth.currentUser?.id;
+    debugPrint('[EventDetail] currentUserId: $currentUserId');
+
+    final myEntry = ref
+        .watch(myEventRosterEntryProvider(
+            eventId: eventId, profileId: currentUserId ?? ''))
+        .valueOrNull;
+    debugPrint('[EventDetail] myEntry: ${myEntry?.profileId} '
+        'isFillIn: ${myEntry?.isFillIn}');
+    debugPrint('[EventDetail] isFillIn (from build): $isFillIn');
+
+    if (isFillIn) {
+      return _SectionCard(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: const BoxDecoration(
+                  color: AppColors.accentSurface,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.swap_horiz,
+                    color: AppColors.accent, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Fill-in confirmed', style: AppTextStyles.h3),
+                    SizedBox(height: 2),
+                    Text(
+                      'You accepted this fill-in request. You\'re marked as going.',
+                      style: AppTextStyles.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
     return _SectionCard(
       children: [
         const Text('Are you going?', style: AppTextStyles.h3),
@@ -280,8 +336,13 @@ class EventDetailScreen extends ConsumerWidget {
               );
             }
             return Column(
-              children:
-                  entries.map((e) => _RosterRow(entry: e)).toList(),
+              children: entries
+                  .map((e) => _RosterRow(
+                        entry: e,
+                        canManage: canRequestFillIn,
+                        eventId: eventId,
+                      ))
+                  .toList(),
             );
           },
         ),
@@ -436,14 +497,81 @@ class _RsvpOptionButton extends ConsumerWidget {
 
 // ── Roster row ────────────────────────────────────────────────
 
-class _RosterRow extends StatelessWidget {
-  const _RosterRow({required this.entry});
+class _RosterRow extends ConsumerStatefulWidget {
+  const _RosterRow({
+    required this.entry,
+    required this.canManage,
+    required this.eventId,
+  });
 
   final EventRosterEntry entry;
+  final bool canManage;
+  final String eventId;
+
+  @override
+  ConsumerState<_RosterRow> createState() => _RosterRowState();
+}
+
+class _RosterRowState extends ConsumerState<_RosterRow> {
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'selected':
+        return AppColors.activeGreen;
+      case 'reserve':
+        return AppColors.pendingAmber;
+      case 'unavailable':
+        return AppColors.error;
+      default:
+        return AppColors.textHint;
+    }
+  }
+
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'selected':
+        return 'Selected';
+      case 'reserve':
+        return 'Reserve';
+      case 'unavailable':
+        return 'Unavailable';
+      default:
+        return status;
+    }
+  }
+
+  Future<void> _cycleStatus(EventRosterEntry entry) async {
+    debugPrint('[EventDetail] _cycleStatus called: ${entry.selectionStatus}');
+
+    final next = entry.selectionStatus == 'selected'
+        ? 'reserve'
+        : entry.selectionStatus == 'reserve'
+            ? 'unavailable'
+            : 'selected';
+
+    debugPrint('[EventDetail] cycling to: $next');
+
+    try {
+      final repo = ref.read(eventsRepositoryProvider);
+      await repo.updateSelectionStatus(
+        eventRosterId: entry.id,
+        status: next,
+      );
+      debugPrint('[EventDetail] update success');
+      ref.invalidate(eventRosterProvider(widget.eventId));
+    } catch (e) {
+      debugPrint('[EventDetail] error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update: $e')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final name = entry.profileFullName ?? 'Unknown';
+    final name = widget.entry.profileFullName ?? 'Unknown';
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -451,7 +579,7 @@ class _RosterRow extends StatelessWidget {
           AvatarWidget(
             size: 36,
             fullName: name,
-            avatarUrl: entry.profileAvatarUrl,
+            avatarUrl: widget.entry.profileAvatarUrl,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -459,7 +587,7 @@ class _RosterRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(name, style: AppTextStyles.body),
-                if (entry.isFillIn)
+                if (widget.entry.isFillIn)
                   Text(
                     'Fill-in',
                     style: AppTextStyles.caption.copyWith(
@@ -470,6 +598,30 @@ class _RosterRow extends StatelessWidget {
               ],
             ),
           ),
+          if (widget.canManage)
+            ElevatedButton(
+              onPressed: () => _cycleStatus(widget.entry),
+              style: ElevatedButton.styleFrom(
+                backgroundColor:
+                    _statusColor(widget.entry.selectionStatus),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 4),
+                minimumSize: const Size(0, 0),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 0,
+              ),
+              child: Text(
+                _statusLabel(widget.entry.selectionStatus),
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
         ],
       ),
     );

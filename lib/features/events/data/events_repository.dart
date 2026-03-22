@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:squadsync/core/supabase/supabase_client.dart';
 import 'package:squadsync/shared/models/enums.dart';
 import 'package:squadsync/shared/models/event.dart';
@@ -174,13 +175,53 @@ class EventsRepository {
 
   /// Returns the event roster for [eventId], joining profile name and avatar.
   Future<List<EventRosterEntry>> getEventRoster(String eventId) async {
-    final response = await supabase
+    try {
+      final response = await supabase
+          .from('event_roster')
+          .select('''
+            *,
+            profiles!inner(
+              full_name,
+              avatar_url
+            )
+          ''')
+          .eq('event_id', eventId)
+          .order('profiles(full_name)');
+      debugPrint('[EventRoster] response: $response');
+      return (response as List)
+          .map((j) => EventRosterEntry.fromJson(j as Map<String, dynamic>))
+          .toList();
+    } catch (e, st) {
+      debugPrint('[EventRoster] error: $e');
+      debugPrint('[EventRoster] stack: $st');
+      rethrow;
+    }
+  }
+
+  /// Returns the event roster entry for [profileId] in [eventId], or null.
+  Future<EventRosterEntry?> getMyEventRosterEntry({
+    required String eventId,
+    required String profileId,
+  }) async {
+    final data = await supabase
         .from('event_roster')
         .select('*, profiles(full_name, avatar_url)')
-        .eq('event_id', eventId);
+        .eq('event_id', eventId)
+        .eq('profile_id', profileId)
+        .maybeSingle();
 
-    return (response as List)
-        .map((row) => EventRosterEntry.fromJson(row as Map<String, dynamic>))
-        .toList();
+    if (data == null) return null;
+    return EventRosterEntry.fromJson(data);
+  }
+
+  /// Updates the selection_status of an event_roster row.
+  Future<void> updateSelectionStatus({
+    required String eventRosterId,
+    required String status,
+  }) async {
+    await supabase
+        .from('event_roster')
+        .update({'selection_status': status})
+        .eq('id', eventRosterId);
   }
 }

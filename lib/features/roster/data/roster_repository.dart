@@ -761,6 +761,29 @@ class RosterRepository {
     return Team.fromJson(data);
   }
 
+  /// Updates squad_size and playing_xi_size for [teamId].
+  Future<void> updateTeamSquadSize({
+    required String teamId,
+    int? squadSize,
+    int? playingXiSize,
+  }) async {
+    await supabase.from('teams').update({
+      'squad_size': squadSize,
+      'playing_xi_size': playingXiSize,
+    }).eq('id', teamId);
+  }
+
+  /// Returns the count of active members in [clubId].
+  Future<int> getActiveMemberCount(String clubId) async {
+    final response = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('club_id', clubId)
+        .neq('role', 'parent');
+
+    return (response as List).length;
+  }
+
   /// Returns all divisions for a club, ordered by display_order.
   Future<List<Division>> getDivisionsForClub(String clubId) async {
     final response = await supabase

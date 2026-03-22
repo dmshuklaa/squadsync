@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import 'package:squadsync/core/theme/app_theme.dart';
+import 'package:squadsync/features/events/providers/events_providers.dart';
 import 'package:squadsync/features/fill_in/providers/fill_in_providers.dart';
 import 'package:squadsync/shared/models/enums.dart';
 import 'package:squadsync/shared/widgets/avatar_widget.dart';
@@ -211,6 +212,7 @@ class _RespondFillInScreenState extends ConsumerState<RespondFillInScreen> {
                                 context,
                                 ref,
                                 FillInRequestStatus.accepted,
+                                request.eventId,
                               ),
                     ),
                   ),
@@ -241,6 +243,7 @@ class _RespondFillInScreenState extends ConsumerState<RespondFillInScreen> {
                                 context,
                                 ref,
                                 FillInRequestStatus.declined,
+                                request.eventId,
                               ),
                     ),
                   ),
@@ -261,6 +264,7 @@ class _RespondFillInScreenState extends ConsumerState<RespondFillInScreen> {
     BuildContext context,
     WidgetRef ref,
     FillInRequestStatus status,
+    String eventId,
   ) async {
     setState(() => _isResponding = true);
     final navigator = Navigator.of(context);
@@ -272,6 +276,9 @@ class _RespondFillInScreenState extends ConsumerState<RespondFillInScreen> {
             status: status,
           );
       ref.invalidate(fillInRequestByIdProvider(widget.requestId));
+      ref.invalidate(rsvpCountsProvider(eventId));
+      ref.invalidate(myRsvpProvider(eventId));
+      ref.invalidate(eventRsvpsProvider(eventId));
       if (mounted) {
         final label =
             status == FillInRequestStatus.accepted ? 'accepted' : 'declined';

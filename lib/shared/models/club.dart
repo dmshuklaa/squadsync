@@ -6,6 +6,7 @@ class Club {
     required this.joinCode,
     required this.createdAt,
     required this.updatedAt,
+    this.fillInMode = 'restricted',
   });
 
   final String id;
@@ -14,6 +15,9 @@ class Club {
   final String joinCode;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String fillInMode;
+
+  bool get isOpenMode => fillInMode == 'open';
 
   factory Club.fromJson(Map<String, dynamic> json) {
     return Club(
@@ -23,6 +27,7 @@ class Club {
       joinCode: json['join_code'] as String,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
+      fillInMode: json['fill_in_mode'] as String? ?? 'restricted',
     );
   }
 
@@ -34,6 +39,7 @@ class Club {
       'join_code': joinCode,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      'fill_in_mode': fillInMode,
     };
   }
 
@@ -44,6 +50,7 @@ class Club {
     String? joinCode,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? fillInMode,
   }) {
     return Club(
       id: id ?? this.id,
@@ -52,7 +59,7 @@ class Club {
       joinCode: joinCode ?? this.joinCode,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      fillInMode: fillInMode ?? this.fillInMode,
     );
   }
 }
-

@@ -19,6 +19,7 @@ import 'package:squadsync/features/fill_in/screens/respond_fill_in_screen.dart';
 import 'package:squadsync/features/chat/screens/chat_screen.dart';
 import 'package:squadsync/features/notifications/screens/alerts_screen.dart';
 import 'package:squadsync/features/onboarding/screens/onboarding_screen.dart';
+import 'package:squadsync/features/onboarding/screens/welcome_screen.dart';
 import 'package:squadsync/features/profile/screens/guardian_requests_screen.dart';
 import 'package:squadsync/features/profile/screens/profile_screen.dart';
 import 'package:squadsync/features/roster/screens/add_guardian_screen.dart';
@@ -89,6 +90,7 @@ const String kFillInRulesRoute = '/profile/fill-in-rules';
 const String kRequestFillInRoute = '/fill-in/request';
 const String kRespondFillInRoute = '/fill-in/respond/:id';
 const String kChatRoute = '/chat/:teamId';
+const String kWelcomeRoute = '/welcome';
 
 // ── Auth-aware ChangeNotifier for GoRouter refreshListenable ─
 
@@ -158,6 +160,11 @@ GoRouter appRouter(AppRouterRef ref) {
       final isAuthRoute = uri == kSignInRoute ||
           uri == kSignUpRoute ||
           uri == kForgotPasswordRoute;
+
+      // Welcome screen requires a session — allow through if authed
+      if (uri == kWelcomeRoute) {
+        return session == null ? kSignInRoute : null;
+      }
 
       // No session → force to sign-in (unless already on an auth route)
       if (session == null) {
@@ -229,6 +236,10 @@ GoRouter appRouter(AppRouterRef ref) {
         path: kOnboardingRoute,
         name: 'onboarding',
         builder: (context, state) => const OnboardingScreen(),
+      ),
+      GoRoute(
+        path: kWelcomeRoute,
+        builder: (context, state) => const WelcomeScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>

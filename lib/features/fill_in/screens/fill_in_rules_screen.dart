@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:squadsync/core/theme/app_theme.dart';
 import 'package:squadsync/features/fill_in/providers/fill_in_providers.dart';
 import 'package:squadsync/features/roster/providers/roster_providers.dart';
+import 'package:squadsync/shared/models/club.dart';
 import 'package:squadsync/shared/models/enums.dart';
 import 'package:squadsync/shared/models/fill_in_rule.dart';
 import 'package:squadsync/shared/widgets/empty_state_widget.dart';
@@ -75,7 +76,11 @@ class _RulesBody extends ConsumerWidget {
         ),
         onPressed: () => _showAddRuleSheet(context, ref, clubId),
       ),
-      body: rulesAsync.when(
+      body: Column(
+        children: [
+          _FillInModeCard(clubId: clubId),
+          Expanded(
+            child: rulesAsync.when(
         loading: () => const Center(
           child: CircularProgressIndicator(color: AppColors.accent),
         ),
@@ -114,6 +119,9 @@ class _RulesBody extends ConsumerWidget {
           );
         },
       ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -132,6 +140,92 @@ class _RulesBody extends ConsumerWidget {
       builder: (ctx) => _AddRuleSheet(clubId: clubId),
     );
     ref.invalidate(fillInRulesProvider(clubId));
+  }
+}
+
+// ── Fill-in mode toggle card ─────────────────────────────────
+
+class _FillInModeCard extends ConsumerWidget {
+  const _FillInModeCard({required this.clubId});
+
+  final String clubId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final clubAsync = ref.watch(clubProvider(clubId));
+    return clubAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (e, _) => const SizedBox.shrink(),
+      data: (Club? club) {
+        final isOpen = club?.isOpenMode ?? false;
+        return Container(
+          margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 3,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: isOpen ? AppColors.accent : AppColors.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Open fill-in mode',
+                      style: AppTextStyles.body
+                          .copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      isOpen
+                          ? 'Any club member can fill in for any team'
+                          : 'Only players matching rules below can fill in',
+                      style: AppTextStyles.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: isOpen,
+                onChanged: (val) async {
+                  try {
+                    await ref
+                        .read(fillInModeNotifierProvider.notifier)
+                        .setMode(
+                          clubId: clubId,
+                          mode: val ? 'open' : 'restricted',
+                        );
+                  } catch (_) {
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Failed to update fill-in mode')),
+                    );
+                  }
+                },
+                activeThumbColor: AppColors.accent,
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import 'package:squadsync/core/router/app_router.dart';
 import 'package:squadsync/core/theme/app_theme.dart';
 import 'package:squadsync/core/utils/error_mapper.dart';
 import 'package:squadsync/features/auth/providers/auth_provider.dart';
@@ -49,11 +51,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   Future<void> _createClub() async {
     if (!_createFormKey.currentState!.validate()) return;
+    final router = GoRouter.of(context);
     try {
       await ref.read(onboardingNotifierProvider.notifier).createClub(
             _clubNameController.text.trim(),
             _selectedSport!,
           );
+      if (!mounted) return;
+      router.go(kWelcomeRoute);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
