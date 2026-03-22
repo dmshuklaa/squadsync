@@ -55,6 +55,42 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           children: [
             const Text('Edit profile', style: AppTextStyles.h3),
             const SizedBox(height: 20),
+            Center(
+              child: GestureDetector(
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Photo upload coming soon')),
+                  );
+                },
+                child: Stack(
+                  children: [
+                    AvatarWidget(
+                      size: 80,
+                      avatarUrl: profile.avatarUrl,
+                      fullName: profile.fullName,
+                      showRing: true,
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: AppColors.accent,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.camera_alt,
+                          size: 16,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
             TextField(
               controller: nameController,
               autofocus: true,

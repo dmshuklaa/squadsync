@@ -33,6 +33,13 @@ class EventDetailScreen extends ConsumerWidget {
     final isFillIn =
         myRosterEntryAsync?.whenOrNull(data: (e) => e?.isFillIn) == true;
 
+    final event = eventAsync.valueOrNull;
+    final canManage = profileAsync.whenOrNull(
+          data: (p) =>
+              p.role == UserRole.clubAdmin || p.role == UserRole.coach,
+        ) ??
+        false;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -40,9 +47,26 @@ class EventDetailScreen extends ConsumerWidget {
         foregroundColor: Colors.white,
         elevation: 0,
         title: eventAsync.maybeWhen(
-          data: (event) => Text(event?.title ?? 'Event'),
+          data: (e) => Text(e?.title ?? 'Event'),
           orElse: () => const Text('Event'),
         ),
+        actions: [
+          if (canManage &&
+              event != null &&
+              event.status == EventStatus.scheduled) ...[
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: 'Edit event',
+              onPressed: () =>
+                  context.push('/events/${event.id}/edit', extra: event),
+            ),
+            TextButton(
+              onPressed: () => _cancelEvent(context, ref, event),
+              style: TextButton.styleFrom(foregroundColor: AppColors.error),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ],
       ),
       body: eventAsync.when(
         loading: () => const Center(
@@ -55,14 +79,11 @@ class EventDetailScreen extends ConsumerWidget {
         data: (event) {
           if (event == null) {
             return const Center(
-              child:
-                  Text('Event not found', style: AppTextStyles.bodySmall),
+              child: Text('Event not found', style: AppTextStyles.bodySmall),
             );
           }
-          final myRsvp =
-              myRsvpAsync.whenOrNull(data: (r) => r?.status);
-          final counts =
-              rsvpCountsAsync.whenOrNull(data: (m) => m) ?? {};
+          final myRsvp = myRsvpAsync.whenOrNull(data: (r) => r?.status);
+          final counts = rsvpCountsAsync.whenOrNull(data: (m) => m) ?? {};
 
           return SingleChildScrollView(
             child: Column(
@@ -78,7 +99,7 @@ class EventDetailScreen extends ConsumerWidget {
                     children: [
                       // ── RSVP section ─────────────────────
                       _buildRsvpSection(
-                          context, ref, myRsvp, counts, isFillIn),
+                          context, ref, myRsvp, counts, isFillIn, event.status),
                       const SizedBox(height: 16),
 
                       // ── Roster section ────────────────────
@@ -101,6 +122,55 @@ class EventDetailScreen extends ConsumerWidget {
         },
       ),
     );
+  }
+
+  Future<void> _cancelEvent(
+      BuildContext context, WidgetRef ref, Event event) async {
+    final router = GoRouter.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Cancel event?'),
+        content: const Text(
+            'This will notify all players that the event is cancelled.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Keep event'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Cancel event'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+
+    try {
+      await supabase
+          .from('events')
+          .update({'status': 'cancelled'})
+          .eq('id', event.id);
+      ref.invalidate(eventDetailProvider(event.id));
+      ref.invalidate(upcomingEventsProvider);
+      if (!context.mounted) return;
+      messenger.showSnackBar(
+          const SnackBar(content: Text('Event cancelled')));
+      router.pop();
+    } catch (e) {
+      if (!context.mounted) return;
+      messenger
+          .showSnackBar(SnackBar(content: Text('Failed to cancel: $e')));
+    }
   }
 
   // ── Hero header (primary bg, bottom radius 24) ────────────
@@ -197,17 +267,25 @@ class EventDetailScreen extends ConsumerWidget {
     RsvpStatus? myRsvp,
     Map<RsvpStatus, int> counts,
     bool isFillIn,
+    EventStatus eventStatus,
   ) {
-    final currentUserId = supabase.auth.currentUser?.id;
-    debugPrint('[EventDetail] currentUserId: $currentUserId');
-
-    final myEntry = ref
-        .watch(myEventRosterEntryProvider(
-            eventId: eventId, profileId: currentUserId ?? ''))
-        .valueOrNull;
-    debugPrint('[EventDetail] myEntry: ${myEntry?.profileId} '
-        'isFillIn: ${myEntry?.isFillIn}');
-    debugPrint('[EventDetail] isFillIn (from build): $isFillIn');
+    if (eventStatus == EventStatus.cancelled) {
+      return _SectionCard(
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.cancel_outlined,
+                  color: AppColors.error, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'This event has been cancelled.',
+                style: AppTextStyles.body.copyWith(color: AppColors.error),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
 
     if (isFillIn) {
       return _SectionCard(

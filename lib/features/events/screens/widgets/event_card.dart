@@ -23,128 +23,145 @@ class EventCard extends ConsumerWidget {
     final myRsvp = myRsvpAsync.whenOrNull(data: (r) => r?.status);
 
     final isGame = event.eventType == EventType.game;
+    final isCancelled = event.status == EventStatus.cancelled;
     final dateStr = DateFormat('E d MMM').format(event.startsAt.toLocal());
     final timeStr = DateFormat('h:mm a').format(event.startsAt.toLocal());
+    final headerColor = isCancelled
+        ? AppColors.textSecondary
+        : (isGame ? AppColors.primary : AppColors.primaryLight);
 
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.07),
-              blurRadius: 12,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Header bar ──────────────────────────────────
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: isGame ? AppColors.primary : AppColors.primaryLight,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  topRight: Radius.circular(16),
+      child: Opacity(
+        opacity: isCancelled ? 0.65 : 1.0,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.07),
+                blurRadius: 12,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Header bar ──────────────────────────────────
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: headerColor,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    topRight: Radius.circular(16),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      isCancelled
+                          ? Icons.cancel_outlined
+                          : (isGame
+                              ? Icons.sports_soccer
+                              : Icons.fitness_center),
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      isCancelled
+                          ? 'CANCELLED'
+                          : event.eventType.label.toUpperCase(),
+                      style: AppTextStyles.label.copyWith(
+                        color: Colors.white.withValues(alpha: 0.85),
+                        fontSize: 11,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      dateStr,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              child: Row(
-                children: [
-                  Icon(
-                    isGame ? Icons.sports_soccer : Icons.fitness_center,
-                    color: Colors.white,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    event.eventType.label.toUpperCase(),
-                    style: AppTextStyles.label.copyWith(
-                      color: Colors.white.withValues(alpha: 0.85),
-                      fontSize: 11,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    dateStr,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
 
-            // ── Body ─────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(event.title, style: AppTextStyles.body.copyWith(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(Icons.access_time_outlined,
-                          size: 14, color: AppColors.textHint),
-                      const SizedBox(width: 4),
-                      Text(timeStr, style: AppTextStyles.bodySmall),
-                      if (event.location != null) ...[
-                        const SizedBox(width: 12),
-                        const Icon(Icons.location_on_outlined,
+              // ── Body ─────────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(event.title,
+                        style: AppTextStyles.body
+                            .copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.access_time_outlined,
                             size: 14, color: AppColors.textHint),
                         const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            event.location!,
-                            style: AppTextStyles.bodySmall,
-                            overflow: TextOverflow.ellipsis,
+                        Text(timeStr, style: AppTextStyles.bodySmall),
+                        if (event.location != null) ...[
+                          const SizedBox(width: 12),
+                          const Icon(Icons.location_on_outlined,
+                              size: 14, color: AppColors.textHint),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              event.location!,
+                              style: AppTextStyles.bodySmall,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
+                        ],
                       ],
-                    ],
-                  ),
+                    ),
 
-                  const SizedBox(height: 12),
+                    const SizedBox(height: 12),
 
-                  // ── RSVP buttons ─────────────────────────
-                  Row(
-                    children: [
-                      _RsvpButton(
-                        label: 'Going',
-                        icon: Icons.check_circle_outline,
-                        value: RsvpStatus.going,
-                        selected: myRsvp == RsvpStatus.going,
-                        eventId: event.id,
+                    // ── RSVP buttons (hidden when cancelled) ──
+                    if (!isCancelled)
+                      Row(
+                        children: [
+                          _RsvpButton(
+                            label: 'Going',
+                            icon: Icons.check_circle_outline,
+                            value: RsvpStatus.going,
+                            selected: myRsvp == RsvpStatus.going,
+                            eventId: event.id,
+                          ),
+                          const SizedBox(width: 8),
+                          _RsvpButton(
+                            label: 'Maybe',
+                            icon: Icons.help_outline,
+                            value: RsvpStatus.maybe,
+                            selected: myRsvp == RsvpStatus.maybe,
+                            eventId: event.id,
+                          ),
+                          const SizedBox(width: 8),
+                          _RsvpButton(
+                            label: "Can't go",
+                            icon: Icons.cancel_outlined,
+                            value: RsvpStatus.notGoing,
+                            selected: myRsvp == RsvpStatus.notGoing,
+                            eventId: event.id,
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      _RsvpButton(
-                        label: 'Maybe',
-                        icon: Icons.help_outline,
-                        value: RsvpStatus.maybe,
-                        selected: myRsvp == RsvpStatus.maybe,
-                        eventId: event.id,
-                      ),
-                      const SizedBox(width: 8),
-                      _RsvpButton(
-                        label: "Can't go",
-                        icon: Icons.cancel_outlined,
-                        value: RsvpStatus.notGoing,
-                        selected: myRsvp == RsvpStatus.notGoing,
-                        eventId: event.id,
-                      ),
-                    ],
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

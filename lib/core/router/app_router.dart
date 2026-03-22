@@ -10,6 +10,8 @@ import 'package:squadsync/features/auth/screens/forgot_password_screen.dart';
 import 'package:squadsync/features/auth/screens/sign_in_screen.dart';
 import 'package:squadsync/features/auth/screens/sign_up_screen.dart';
 import 'package:squadsync/features/events/screens/create_event_screen.dart';
+import 'package:squadsync/features/events/screens/edit_event_screen.dart';
+import 'package:squadsync/shared/models/event.dart';
 import 'package:squadsync/features/events/screens/event_detail_screen.dart';
 import 'package:squadsync/features/events/screens/event_list_screen.dart';
 import 'package:squadsync/features/events/screens/home_screen.dart';
@@ -86,6 +88,7 @@ const String kGuardianRequestsRoute = '/profile/guardian-requests';
 const String kEventListRoute = '/home/events';
 const String kEventDetailRoute = '/events/:id';
 const String kCreateEventRoute = '/events/create';
+const String kEditEventRoute = '/events/:id/edit';
 const String kFillInRulesRoute = '/profile/fill-in-rules';
 const String kRequestFillInRoute = '/fill-in/request';
 const String kRespondFillInRoute = '/fill-in/respond/:id';
@@ -201,6 +204,12 @@ GoRouter appRouter(AppRouterRef ref) {
         path: kEventDetailRoute,
         builder: (context, state) => EventDetailScreen(
           eventId: state.pathParameters['id']!,
+        ),
+      ),
+      GoRoute(
+        path: kEditEventRoute,
+        builder: (context, state) => EditEventScreen(
+          event: state.extra as Event,
         ),
       ),
       GoRoute(

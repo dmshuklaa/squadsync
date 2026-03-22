@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:squadsync/core/router/app_router.dart';
+import 'package:squadsync/core/supabase/supabase_client.dart';
 import 'package:squadsync/core/theme/app_theme.dart';
 import 'package:squadsync/features/roster/providers/roster_providers.dart';
 import 'package:squadsync/features/roster/screens/widgets/roster_list_item.dart';
@@ -64,6 +65,10 @@ class _RosterListScreenState extends ConsumerState<RosterListScreen> {
         ) ??
         false;
 
+    final isAdmin =
+        profileAsync.whenOrNull(data: (p) => p.role == UserRole.clubAdmin) ??
+            false;
+
     // Compute selected team name for chat navigation
     final allTeams = teamsAsync.valueOrNull ?? [];
     final selectedTeam = allTeams.cast<Team?>().firstWhere(
@@ -81,6 +86,13 @@ class _RosterListScreenState extends ConsumerState<RosterListScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          if (isAdmin && selectedTeam != null)
+            IconButton(
+              icon: const Icon(Icons.edit_outlined, color: Colors.white),
+              tooltip: 'Edit team',
+              onPressed: () =>
+                  _showEditTeamSheet(context, ref, selectedTeam),
+            ),
           if (_selectedTeamId != null)
             IconButton(
               icon: const Icon(Icons.chat_bubble_outline),
@@ -136,6 +148,99 @@ class _RosterListScreenState extends ConsumerState<RosterListScreen> {
               ),
             )
           : null,
+    );
+  }
+
+  Future<void> _showEditTeamSheet(
+      BuildContext context, WidgetRef ref, Team team) async {
+    final messenger = ScaffoldMessenger.of(context);
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
+          // Controllers live inside the builder — tied to sheet lifecycle
+          final divController =
+              TextEditingController(text: team.divisionName ?? '');
+          final teamController = TextEditingController(text: team.name);
+
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Edit team', style: AppTextStyles.h3),
+                  const SizedBox(height: 24),
+                  TextFormField(
+                    controller: divController,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Division name',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: teamController,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Team name',
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.accent,
+                      foregroundColor: AppColors.primary,
+                      minimumSize: const Size(double.infinity, 52),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () async {
+                      final divName = divController.text.trim();
+                      final teamName = teamController.text.trim();
+                      if (divName.isEmpty || teamName.isEmpty) return;
+
+                      try {
+                        await supabase
+                            .from('divisions')
+                            .update({'name': divName})
+                            .eq('id', team.divisionId);
+                        await supabase
+                            .from('teams')
+                            .update({'name': teamName})
+                            .eq('id', team.id);
+                        ref.invalidate(userTeamsProvider);
+                        if (!sheetContext.mounted) return;
+                        Navigator.of(sheetContext).pop();
+                        messenger.showSnackBar(
+                          const SnackBar(content: Text('Team updated')),
+                        );
+                      } catch (e) {
+                        if (!sheetContext.mounted) return;
+                        messenger.showSnackBar(
+                          SnackBar(content: Text('Failed: $e')),
+                        );
+                      }
+                    },
+                    child: const Text('Save'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 
